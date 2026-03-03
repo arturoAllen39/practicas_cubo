@@ -19,18 +19,15 @@ def cannyEdge():
     win_controls = 'Controles'
 
     cv.namedWindow(win_video)
-    cv.namedWindow(win_controls)
+    cv.namedWindow(win_controls, cv.WINDOW_NORMAL)
+    cv.resizeWindow(win_controls, 400, 400)
 
-    # Todos los trackbars van en la ventana de controles
-    cv.createTrackbar('Blur',        win_controls, 5,   31,  callback)
-    cv.createTrackbar('minThres',    win_controls, 50,  255, callback)
-    cv.createTrackbar('maxThres',    win_controls, 150, 255, callback)
-    cv.createTrackbar('Dilate',      win_controls, 1,   10,  callback)
-    cv.createTrackbar('Erode',       win_controls, 0,   10,  callback)
-    cv.createTrackbar('Bilateral_d', win_controls, 5,   20,  callback)
-    cv.createTrackbar('Bilateral_s', win_controls, 50,  150, callback)
+    # Trackbars útiles ahora
+    cv.createTrackbar('Blur',       win_controls, 7, 31, callback)
+    cv.createTrackbar('Threshold',  win_controls, 60, 255, callback)
+    cv.createTrackbar('Close',      win_controls, 5, 20, callback)
+    cv.createTrackbar('Open',       win_controls, 3, 20, callback)
 
-    # Imagen de relleno para que la ventana de controles tenga cuerpo visible
     panel = np.zeros((100, 400), dtype=np.uint8)
     cv.imshow(win_controls, panel)
 
@@ -43,33 +40,40 @@ def cannyEdge():
             cap.set(cv.CAP_PROP_POS_FRAMES, 0)
             continue
 
-        blur_k      = cv.getTrackbarPos('Blur',        win_controls)
-        minThres    = cv.getTrackbarPos('minThres',     win_controls)
-        maxThres    = cv.getTrackbarPos('maxThres',     win_controls)
-        dilate_iter = cv.getTrackbarPos('Dilate',       win_controls)
-        erode_iter  = cv.getTrackbarPos('Erode',        win_controls)
-        bil_d       = cv.getTrackbarPos('Bilateral_d',  win_controls)
-        bil_s       = cv.getTrackbarPos('Bilateral_s',  win_controls)
+        blur_k     = cv.getTrackbarPos('Blur',      win_controls)
+        thresh_val = cv.getTrackbarPos('Threshold', win_controls)
+        close_k    = cv.getTrackbarPos('Close',     win_controls)
+        open_k     = cv.getTrackbarPos('Open',      win_controls)
 
         if blur_k < 1: blur_k = 1
         if blur_k % 2 == 0: blur_k += 1
-        if bil_d < 1: bil_d = 1
+        if close_k < 1: close_k = 1
+        if open_k < 1: open_k = 1
 
         if mostrar_filtros:
-            gray      = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
-            bilateral = cv.bilateralFilter(gray, bil_d, bil_s, bil_s)
-            blur      = cv.GaussianBlur(bilateral, (blur_k, blur_k), 0)
-            edges     = cv.Canny(blur, minThres, maxThres)
 
-            kernel = np.ones((3, 3), np.uint8)
-            if dilate_iter > 0:
-                edges = cv.dilate(edges, kernel, iterations=dilate_iter)
-            if erode_iter > 0:
-                edges = cv.erode(edges, kernel, iterations=erode_iter)
+            # 1️⃣ Escala de grises
+            gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
 
-            display = cv.cvtColor(edges, cv.COLOR_GRAY2BGR)
-            cv.putText(display, 'MODO: FILTROS [F para cambiar]', (10, 30),
+            # 2️⃣ Blur para suavizar ruido
+            blur = cv.GaussianBlur(gray, (blur_k, blur_k), 0)
+
+            # 3️⃣ Threshold invertido (personas oscuras → blancas)
+            _, thresh = cv.threshold(blur, thresh_val, 255, cv.THRESH_BINARY_INV)
+
+            # 4️⃣ Cerrar huecos
+            kernel_close = np.ones((close_k, close_k), np.uint8)
+            thresh = cv.morphologyEx(thresh, cv.MORPH_CLOSE, kernel_close)
+
+            # 5️⃣ Eliminar ruido pequeño
+            kernel_open = np.ones((open_k, open_k), np.uint8)
+            thresh = cv.morphologyEx(thresh, cv.MORPH_OPEN, kernel_open)
+
+            display = cv.cvtColor(thresh, cv.COLOR_GRAY2BGR)
+
+            cv.putText(display, 'MODO: SEGMENTACION [F para cambiar]', (10, 30),
                        cv.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+
         else:
             display = frame.copy()
             cv.putText(display, 'MODO: ORIGINAL [F para cambiar]', (10, 30),
