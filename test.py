@@ -1,7 +1,7 @@
 import cv2 as cv
-import numpy as npexit
-from sort import Sort
 import numpy as np
+from sort import Sort
+from collections import defaultdict
 
 mostrar_filtros = True
 
@@ -19,33 +19,31 @@ def cannyEdge():
 
     win_video    = 'Video'
     win_controls = 'Controles'
+
     cv.namedWindow(win_video, cv.WINDOW_NORMAL)
     cv.namedWindow(win_controls, cv.WINDOW_NORMAL)
-
-    cv.resizeWindow(win_video, 700, 600)
     cv.resizeWindow(win_controls, 400, 200)
-
     cv.moveWindow(win_video, 0, 0)
     cv.moveWindow(win_controls, 710, 0)
 
-    cv.createTrackbar('Blur',       win_controls, 7,  31,  callback)
+    cv.createTrackbar('Blur',       win_controls, 5,  31,  callback)
     cv.createTrackbar('Min_thresh', win_controls, 0,  255, callback)
-    cv.createTrackbar('Max_thresh', win_controls, 60, 255, callback)
-    cv.createTrackbar('Close',      win_controls, 5,  20,  callback)
+    cv.createTrackbar('Max_thresh', win_controls, 45, 255, callback)
+    cv.createTrackbar('Close',      win_controls, 17,  20,  callback)
     cv.createTrackbar('Open',       win_controls, 3,  20,  callback)
 
     panel = np.zeros((100, 400), dtype=np.uint8)
     cv.imshow(win_controls, panel)
 
-    # Inicializar SORT
-    # max_age     = cuántos frames mantiene una ID sin detectarse
-    # min_hits    = cuántas detecciones seguidas antes de asignar ID
-    # iou_threshold = qué tan parecidas deben ser las cajas para asociarlas
-    tracker = Sort(max_age=10, min_hits=3, iou_threshold=0.3)
+    tracker = Sort(max_age=20, min_hits=3, iou_threshold=0.3)
 
-    # Colores únicos por ID
     np.random.seed(42)
-    colors = np.random.randint(0, 255, size=(100, 3), dtype=np.uint8)
+    colors = np.random.randint(0, 255, size=(200, 3), dtype=np.uint8)
+
+    # Historial por ID
+    historial_centroides = defaultdict(list)  # ID → [(cx, cy), ...]
+    historial_areas      = defaultdict(list)  # ID → [area, ...]
+    MAX_HISTORIAL        = 30                 # cuántos frames guardamos
 
     print("Presiona [F] para alternar entre vista original y con filtros")
     print("Presiona [Q] para salir")
@@ -78,20 +76,19 @@ def cannyEdge():
         kernel_open = np.ones((open_k, open_k), np.uint8)
         mask = cv.morphologyEx(mask, cv.MORPH_OPEN, kernel_open)
 
-        # Extraer bounding boxes desde contornos
+        # Extraer bounding boxes
         contours, _ = cv.findContours(mask, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
 
         detections = []
         for cnt in contours:
             area = cv.contourArea(cnt)
-            if area < 500:  # Ignorar manchas muy pequeñas (ruido)
+            if area < 500:
                 continue
             x, y, w, h = cv.boundingRect(cnt)
-            detections.append([x, y, x + w, y + h, 1.0])  # [x1,y1,x2,y2, score]
+            detections.append([x, y, x + w, y + h, 1.0])
 
         detections = np.array(detections) if detections else np.empty((0, 5))
 
-        # Actualizar SORT
         tracked = tracker.update(detections)
 
         if mostrar_filtros:
@@ -99,18 +96,49 @@ def cannyEdge():
         else:
             display = frame.copy()
 
-        # Dibujar resultados del tracker
         for obj in tracked:
             x1, y1, x2, y2, obj_id = map(int, obj)
-            color = colors[obj_id % 100].tolist()
+            color = colors[obj_id % 200].tolist()
 
-            cv.rectangle(display, (x1, y1), (x2, y2), color, 2)
-            cv.putText(display, f'ID {obj_id}', (x1, y1 - 10),
-                       cv.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+            cx = (x1 + x2) // 2
+            cy = (y1 + y2) // 2
+            area_actual = (x2 - x1) * (y2 - y1)
 
-            # Centroide
-            cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
+            # Guardar historial
+            historial_centroides[obj_id].append((cx, cy))
+            historial_areas[obj_id].append(area_actual)
+
+            # Limitar tamaño del historial
+            if len(historial_centroides[obj_id]) > MAX_HISTORIAL:
+                historial_centroides[obj_id].pop(0)
+            if len(historial_areas[obj_id]) > MAX_HISTORIAL:
+                historial_areas[obj_id].pop(0)
+
+            # Detectar posible fusión: área mucho mayor al promedio histórico
+            fusion_detectada = False
+            if len(historial_areas[obj_id]) > 5:
+                area_promedio = np.mean(historial_areas[obj_id][:-1])
+                if area_actual > area_promedio * 1.7:
+                    fusion_detectada = True
+
+            # Dibujar bounding box
+            grosor = 3 if fusion_detectada else 2
+            cv.rectangle(display, (x1, y1), (x2, y2), color, grosor)
+
+            # Etiqueta con aviso de fusión
+            label = f'ID {obj_id}'
+            if fusion_detectada:
+                label += ' [FUSION]'
+            cv.putText(display, label, (x1, y1 - 10),
+                       cv.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+
+            # Dibujar centroide
             cv.circle(display, (cx, cy), 5, color, -1)
+
+            # Dibujar trayectoria
+            puntos = historial_centroides[obj_id]
+            for i in range(1, len(puntos)):
+                cv.line(display, puntos[i - 1], puntos[i], color, 1)
 
         modo = 'SEGMENTACION' if mostrar_filtros else 'ORIGINAL'
         cv.putText(display, f'MODO: {modo} [F para cambiar]', (10, 30),
