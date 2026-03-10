@@ -1,0 +1,3 @@
+PROBLEMA
+
+1.- El area fuera de la zona jugable interfiere con los jugadores haciendo creer al programa que hay un blob gigante en toda la pantalla.
