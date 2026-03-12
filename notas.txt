@@ -1,3 +1,8 @@
-PROBLEMA
 
-1.- El area fuera de la zona jugable interfiere con los jugadores haciendo creer al programa que hay un blob gigante en toda la pantalla.
+Area de reserva:
+EN los bordes del area jugable se debe saber en que posicion del borde quedo el track
+(con todo y su ID) de ese blob. Por ejemplo, si el blob que esta siendo trackeado con el ID 10 
+se sale por el borde de la izquierda entonces el programa debe guardar que el ID 10 esta en esa
+area hasta que un blob entre por ese lado para reaccinarle su ID (el numero 10.)
+Esto no afectara en nada el tracking pero debemos poner un limite de 21 IDS, que estos se queden
+guardados en el are

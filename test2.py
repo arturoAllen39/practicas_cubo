@@ -328,3 +328,7 @@ def cannyEdge():
 
 if __name__ == '__main__':
     cannyEdge()
+
+
+    # LIMITE DE 21 PERSONAS 
+    # Agregar un area de ID de reserva
