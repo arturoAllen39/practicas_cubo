@@ -179,11 +179,11 @@ class ReservaBordes:
                   f"(reserva {borde}: {list(self.reservas[borde])})")
 
     def registrar_entrada(self, borde):
-        """
-        Cuando un blob entra por un borde, devuelve el ID
-        que le corresponde. Si la reserva está vacía y no
-        se superó el límite, crea un ID nuevo.
-        """
+        
+        # Cuando un blob entra por un borde, devuelve el ID
+        # que le corresponde. Si la reserva está vacía y no
+        # se superó el límite, crea un ID nuevo.
+        
         if self.reservas[borde]:
             # Recuperar el primer ID de la reserva (FIFO)
             track_id = self.reservas[borde].popleft()
@@ -205,12 +205,12 @@ class ReservaBordes:
         return None
 
     def confirmar_activo(self, track_id):
-        """Marca un ID como activo dentro del área jugable."""
+        # Marca un ID como activo dentro del área jugable
         self.ids_activos.add(track_id)
         self.ids_en_reserva.discard(track_id)
 
     def estado(self):
-        """Imprime el estado actual de las reservas."""
+        # Imprime el estado actual de las reserva
         for borde, cola in self.reservas.items():
             if cola:
                 print(f"  Reserva {borde}: {list(cola)}")
@@ -220,8 +220,14 @@ class ReservaBordes:
 #  BLOB TRACKER
 # ─────────────────────────────────────────────
 class BlobTracker:
-    def __init__(self, max_edad_invisible=150, vel_history=10,
-                 max_dist=50, peso_dist=0.7, peso_angulo=0.3):
+    def __init__(
+                self, 
+                max_edad_invisible = 350,
+                vel_history        = 200,
+                max_dist           = 30,
+                peso_dist          = 0.4,
+                peso_angulo        = 0.6
+                 ):
         self.tracks      = {}
         self.next_id     = 1
         self.max_edad    = max_edad_invisible
@@ -233,7 +239,7 @@ class BlobTracker:
 
 
     def reset(self):
-        """Reinicia todos los tracks."""
+        # Reinicia todos los tracks.
         self.tracks           = {}
         self.next_id          = 1
         self.fusiones_activas = {}
@@ -259,7 +265,7 @@ class BlobTracker:
         vx = float(np.mean(vxs))
         vy = float(np.mean(vys))
         # Limitar velocidad maxima a 5px por frame
-        MAX_VEL = 5.0
+        MAX_VEL = 3  
         vx = max(-MAX_VEL, min(MAX_VEL, vx))
         vy = max(-MAX_VEL, min(MAX_VEL, vy))
         return vx, vy
@@ -390,8 +396,8 @@ class BlobTracker:
                 ultima_cy = t['cy']
 
                 # Reducir velocidad gradualmente cuando esta invisible
-                t['vx'] *= 0.85
-                t['vy'] *= 0.85
+                t['vx'] *= 0.50
+                t['vy'] *= 0.50
 
                 t['cx'] = t['cx_pred']
                 t['cy'] = t['cy_pred']
@@ -449,7 +455,9 @@ class BlobTracker:
 def cannyEdge():
     global mostrar_filtros
 
-    cap = cv.VideoCapture('video.mp4')
+    cap = cv.VideoCapture('video3.mp4')
+    fps = cap.get(cv.CAP_PROP_FPS)
+    delay = int(500 / fps) if fps > 0 else 30
     if not cap.isOpened():
         print("No se pudo abrir el video")
         return
@@ -485,11 +493,11 @@ def cannyEdge():
     cv.imshow(win_controls, panel)
 
     tracker = BlobTracker(
-        max_edad_invisible = 50,
-        vel_history        = 10,
-        max_dist           = 50,
-        peso_dist          = 0.6,
-        peso_angulo        = 0.4
+        max_edad_invisible = 350,
+        vel_history        = 200,
+        max_dist           = 30,
+        peso_dist          = 0.4,
+        peso_angulo        = 0.6
     )
 
     np.random.seed(42)
@@ -549,7 +557,7 @@ def cannyEdge():
 
         for cnt in contours:
             area = cv.contourArea(cnt)
-            if area < 800:
+            if area < 400:
                 continue
             x, y, w, h = cv.boundingRect(cnt)
             cx = x + w // 2
@@ -604,7 +612,7 @@ def cannyEdge():
 
         cv.imshow(win_video, display)
 
-        key = cv.waitKey(1) & 0xFF
+        key = cv.waitKey(delay) & 0xFF
         if key == ord('q'):
             break
         elif key == ord('f'):
