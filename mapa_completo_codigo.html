@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mapa Completo — Cubo Negro Tracking</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg-primary: #ffffff;
+    --bg-secondary: #f5f4f0;
+    --text-primary: #1a1a18;
+    --text-secondary: #5f5e5a;
+    --text-tertiary: #888780;
+    --border: rgba(0,0,0,0.12);
+    --border-hover: rgba(0,0,0,0.25);
+    --color-info: #185FA5;
+    --param-bg: #E1F5EE;
+    --param-border: #1D9E75;
+    --param-text: #085041;
+    --font: system-ui, -apple-system, sans-serif;
+    --font-mono: 'Fira Mono', 'Consolas', monospace;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg-primary: #1e1e1c;
+      --bg-secondary: #2a2a28;
+      --text-primary: #e8e6de;
+      --text-secondary: #a8a69e;
+      --text-tertiary: #6e6c66;
+      --border: rgba(255,255,255,0.1);
+      --border-hover: rgba(255,255,255,0.22);
+      --color-info: #85B7EB;
+      --param-bg: #085041;
+      --param-border: #5DCAA5;
+      --param-text: #9FE1CB;
+    }
+  }
+  body { font-family: var(--font); background: var(--bg-secondary); color: var(--text-primary); min-height: 100vh; padding: 24px; }
+  h1 { font-size: 18px; font-weight: 500; margin-bottom: 4px; }
+  .page-sub { font-size: 13px; color: var(--text-secondary); margin-bottom: 20px; line-height: 1.6; }
+  .root { display: flex; min-height: 580px; border: 0.5px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; background: var(--bg-primary); }
+  .sidebar { width: 230px; flex-shrink: 0; border-right: 0.5px solid var(--border); overflow-y: auto; background: var(--bg-secondary); }
+  .sidebar-section { padding: 8px 0; }
+  .sidebar-label { font-size: 11px; font-weight: 500; color: var(--text-tertiary); padding: 6px 14px 4px; letter-spacing: .05em; text-transform: uppercase; }
+  .nav-item { display: flex; align-items: center; gap: 8px; padding: 7px 14px; cursor: pointer; font-size: 13px; color: var(--text-secondary); border-left: 2px solid transparent; transition: all .15s; user-select: none; }
+  .nav-item:hover { background: var(--bg-primary); color: var(--text-primary); }
+  .nav-item.active { background: var(--bg-primary); color: var(--text-primary); border-left-color: var(--text-primary); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .dot-purple { background: #7F77DD; } .dot-teal { background: #1D9E75; } .dot-coral { background: #D85A30; } .dot-amber { background: #BA7517; } .dot-gray { background: #888780; }
+  .detail { flex: 1; padding: 22px 26px; overflow-y: auto; background: var(--bg-primary); }
+  .d-head { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 18px; }
+  .d-badge { font-size: 11px; font-weight: 500; padding: 3px 9px; border-radius: 4px; white-space: nowrap; flex-shrink: 0; margin-top: 3px; }
+  .badge-purple { background: #EEEDFE; color: #3C3489; } .badge-teal { background: #E1F5EE; color: #085041; } .badge-coral { background: #FAECE7; color: #712B13; } .badge-gray { background: #F1EFE8; color: #444441; } .badge-amber { background: #FAEEDA; color: #633806; }
+  @media (prefers-color-scheme: dark) {
+    .badge-purple { background: #3C3489; color: #CECBF6; } .badge-teal { background: #085041; color: #9FE1CB; } .badge-coral { background: #712B13; color: #F5C4B3; } .badge-gray { background: #444441; color: #D3D1C7; } .badge-amber { background: #633806; color: #FAC775; }
+  }
+  .d-title { font-size: 16px; font-weight: 500; line-height: 1.3; }
+  .d-sub { font-size: 13px; color: var(--text-secondary); margin-top: 4px; line-height: 1.6; }
+  .section-title { font-size: 11px; font-weight: 500; color: var(--text-tertiary); letter-spacing: .05em; text-transform: uppercase; margin: 18px 0 10px; }
+  .var-block { margin-bottom: 11px; padding-bottom: 11px; border-bottom: 0.5px solid var(--border); }
+  .var-block:last-child { border-bottom: none; margin-bottom: 0; }
+  .var-row { display: grid; grid-template-columns: auto 1fr; gap: 5px 14px; align-items: start; }
+  .var-name { font-size: 12px; font-family: var(--font-mono); color: var(--color-info); white-space: nowrap; padding-top: 2px; }
+  .var-desc { font-size: 13px; color: var(--text-secondary); line-height: 1.55; }
+  .param-flow-col { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; margin-left: 28px; }
+  .param-flow { display: inline-flex; align-items: flex-start; gap: 5px; font-size: 11px; font-weight: 500; color: var(--param-text); background: var(--param-bg); border: 0.5px solid var(--param-border); border-radius: 4px; padding: 3px 8px; line-height: 1.45; }
+  .connects-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+  .chip { font-size: 12px; padding: 3px 9px; border-radius: 4px; border: 0.5px solid var(--border-hover); color: var(--text-secondary); }
+  .divider { height: 0.5px; background: var(--border); margin: 16px 0; }
+  .legend { display: flex; flex-wrap: wrap; gap: 16px; padding: 10px 16px; border-top: 0.5px solid var(--border); background: var(--bg-secondary); margin-top: 16px; border-radius: var(--radius-md); }
+  .leg-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); }
+  .param-legend-tag { font-size: 11px; font-weight: 500; color: var(--param-text); background: var(--param-bg); border: 0.5px solid var(--param-border); border-radius: 4px; padding: 1px 7px; }
+</style>
+</head>
+<body>
+
+<h1>Mapa completo del código — Cubo Negro Tracking</h1>
+<p class="page-sub">
+  Haz clic en cualquier elemento del panel izquierdo para ver sus detalles.<br>
+  Las etiquetas <span class="param-legend-tag">→ / ← flujo de parámetro</span> muestran cómo cada variable entra o sale como parámetro entre funciones.
+</p>
+
+<div class="root">
+  <div class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Clases</div>
+      <div class="nav-item active" onclick="show('reserva')" id="nav-reserva"><span class="dot dot-purple"></span>ReservaBordes</div>
+      <div class="nav-item" onclick="show('tracker')" id="nav-tracker"><span class="dot dot-purple"></span>BlobTracker</div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Inicio / Setup</div>
+      <div class="nav-item" onclick="show('main')" id="nav-main"><span class="dot dot-teal"></span>cannyEdge()</div>
+      <div class="nav-item" onclick="show('calibrar')" id="nav-calibrar"><span class="dot dot-teal"></span>calibrar_roi()</div>
+      <div class="nav-item" onclick="show('clasificar')" id="nav-clasificar"><span class="dot dot-teal"></span>clasificar_bordes()</div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Helpers en runtime</div>
+      <div class="nav-item" onclick="show('detectar')" id="nav-detectar"><span class="dot dot-coral"></span>detectar_borde()</div>
+      <div class="nav-item" onclick="show('punto')" id="nav-punto"><span class="dot dot-coral"></span>punto_cerca_segmento()</div>
+      <div class="nav-item" onclick="show('suavizar')" id="nav-suavizar"><span class="dot dot-coral"></span>suavizar_mask()</div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Métodos del tracker</div>
+      <div class="nav-item" onclick="show('predecir')" id="nav-predecir"><span class="dot dot-amber"></span>_predecir()</div>
+      <div class="nav-item" onclick="show('calcvel')" id="nav-calcvel"><span class="dot dot-amber"></span>_calcular_velocidad()</div>
+      <div class="nav-item" onclick="show('angulo')" id="nav-angulo"><span class="dot dot-amber"></span>_angulo() / _diff_angulo()</div>
+      <div class="nav-item" onclick="show('agregar')" id="nav-agregar"><span class="dot dot-amber"></span>agregar_track()</div>
+      <div class="nav-item" onclick="show('proximidad')" id="nav-proximidad"><span class="dot dot-amber"></span>_actualizar_proximidad()</div>
+      <div class="nav-item" onclick="show('posicion')" id="nav-posicion"><span class="dot dot-amber"></span>_posicion_esperada()</div>
+      <div class="nav-item" onclick="show('actualizar')" id="nav-actualizar"><span class="dot dot-amber"></span>actualizar() ★</div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Utilidades</div>
+      <div class="nav-item" onclick="show('callbacks')" id="nav-callbacks"><span class="dot dot-gray"></span>callback() / mouse_callback()</div>
+    </div>
+  </div>
+  <div class="detail" id="detail-panel">
+    <p style="font-size:13px;color:var(--text-tertiary);font-style:italic">← Haz clic en un elemento del panel para ver sus detalles</p>
+  </div>
+</div>
+
+<div class="legend">
+  <div class="leg-item"><span class="dot dot-purple"></span>Clase</div>
+  <div class="leg-item"><span class="dot dot-teal"></span>Función de setup</div>
+  <div class="leg-item"><span class="dot dot-coral"></span>Helper de runtime</div>
+  <div class="leg-item"><span class="dot dot-amber"></span>Método interno del tracker</div>
+  <div class="leg-item"><span class="dot dot-gray"></span>Utilidad</div>
+</div>
+
+<script>
+// Estructura: sections[] con vars[] donde cada var tiene:
+//   n = nombre, d = descripción, p = array de flujos de parámetro (opcional)
+// p usa → para "sale hacia" y ← para "entra desde"
+const data = {
+
+  reserva: {
+    badge:'Clase', badgeClass:'badge-purple',
+    title:'ReservaBordes',
+    sub:'Sistema de colas FIFO. Guarda los IDs de personas que salieron del área y los devuelve cuando esa misma persona vuelve a entrar por el mismo borde.',
+    sections:[
+      {title:'Variables del __init__', vars:[
+        {n:'max_ids', d:'Número máximo de personas que pueden estar en el área al mismo tiempo.',
+         p:['← entra como argumento desde cannyEdge() al crear la instancia: ReservaBordes(max_ids=MAX_IDS)']},
+        {n:'reservas', d:'Diccionario con 4 colas (deque), una por borde. Aquí esperan los IDs hasta que vuelvan a entrar.',
+         p:['→ registrar_salida() escribe en reservas[borde].append(track_id)','→ registrar_entrada() lee de reservas[borde].popleft()']},
+        {n:'ids_en_reserva', d:'Set de IDs que están en alguna cola esperando reentrar. Evita contarlos como personas nuevas.',
+         p:['→ registrar_salida() añade IDs aquí','→ registrar_entrada() y confirmar_activo() los quitan de aquí']},
+        {n:'ids_activos', d:'Set de IDs que están dentro del área jugando ahora mismo.',
+         p:['→ confirmar_activo() añade IDs aquí','→ registrar_salida() los descarta de aquí']},
+        {n:'total_ids', d:'Contador que sube cuando se crea un ID completamente nuevo. Garantiza que nunca se repitan.',
+         p:['→ registrar_entrada() lo incrementa cuando la cola del borde está vacía y hay cupo']},
+      ]},
+      {title:'Métodos', vars:[
+        {n:'reset()', d:'Limpia todo: vacía las 4 colas y los sets. Se llama cuando el video termina y reinicia.',
+         p:['← lo llama cannyEdge() cuando cap.read() devuelve ret=False (fin del video)']},
+        {n:'registrar_salida(track_id, borde)', d:'Cuando un blob desaparece por un borde, mete su ID a la cola de ese borde para que espere.',
+         p:['← track_id viene de tid al iterar ids_activos en actualizar()','← borde viene del return de detectar_borde(ultima_cx, ultima_cy, bordes, umbral_borde)']},
+        {n:'registrar_entrada(borde)', d:'Cuando aparece un blob en un borde, saca el primer ID de esa cola FIFO. Si está vacía y hay cupo, crea un ID nuevo.',
+         p:['← borde viene del return de detectar_borde() en actualizar()','→ devuelve nuevo_id que actualizar() usa para llamar a agregar_track(nuevo_id, cx, cy)']},
+        {n:'confirmar_activo(track_id)', d:'Marca un ID como "ya está adentro jugando": lo añade a ids_activos y lo quita de ids_en_reserva.',
+         p:['← track_id viene de nuevo_id o id_recuperado en actualizar()']},
+      ]},
+      {title:'Conecta con', vars:[]},
+    ],
+    connects:['actualizar()','detectar_borde()','cannyEdge()']
+  },
+
+  tracker: {
+    badge:'Clase', badgeClass:'badge-purple',
+    title:'BlobTracker',
+    sub:'El cerebro del sistema. Recibe los blobs detectados cada frame y decide cuál ID le corresponde a cada uno, manteniendo coherencia entre frames.',
+    sections:[
+      {title:'Variables del __init__', vars:[
+        {n:'tracks', d:'El diccionario principal. Cada llave es un ID y el valor es otro dict con todos los datos de esa persona.',
+         p:['→ agregar_track() escribe entradas nuevas aquí','→ actualizar() lee y modifica cada track cada frame','→ _predecir() escribe cx_pred/cy_pred en cada track']},
+        {n:'next_id', d:'El próximo número disponible para un ID nuevo.',
+         p:['→ actualizar() lo usa como fallback si la reserva no tiene IDs y hay cupo']},
+        {n:'max_edad', d:'Frames máximos que puede estar invisible un blob antes de ser eliminado.',
+         p:['← entra como argumento max_edad_invisible desde cannyEdge()','→ actualizar() lo compara con t[edad_invisible] para decidir si borrar el track']},
+        {n:'vel_history', d:'Cuántas posiciones anteriores se guardan para calcular la velocidad promedio.',
+         p:['← entra como argumento desde cannyEdge()','→ actualizar() limita len(t[historial]) a este valor','→ _calcular_velocidad() recibe el historial ya recortado']},
+        {n:'max_dist', d:'Distancia máxima en píxeles entre posición predicha y detección real para considerarlos el mismo blob.',
+         p:['← entra como argumento desde cannyEdge()','→ actualizar() descarta scores donde dist > self.max_dist','→ también es radio de búsqueda en rescate y absorción de fusiones']},
+        {n:'fusiones_activas', d:'Dict que registra qué IDs fueron absorbidos dentro de otro blob. Permite recuperarlos al separarse.',
+         p:['→ actualizar() escribe aquí al detectar que un track desapareció cerca de otro blob activo','→ actualizar() lee aquí cuando un blob sin asignar podría salir de una fusión']},
+        {n:'frames_juntos', d:'Cuenta frames consecutivos que llevan dos blobs muy cerca. Al superar el umbral se marcan como fusionados.',
+         p:['→ _actualizar_proximidad() lo escribe y lee cada frame']},
+        {n:'pares_fusionados', d:'Set de pares (id_menor, id_mayor) que están oficialmente fusionados ahora mismo.',
+         p:['→ _actualizar_proximidad() escribe aquí cuando frames_juntos >= FRAMES_PARA_FUSION','→ cannyEdge() lo lee para dibujar etiquetas [ID1, ID2] con borde más grueso']},
+      ]},
+      {title:'Métodos internos (ver sidebar)', vars:[]},
+      {title:'Conecta con', vars:[]},
+    ],
+    connects:['ReservaBordes','detectar_borde()','_predecir()','_calcular_velocidad()','_angulo()','agregar_track()','_actualizar_proximidad()','_posicion_esperada()','actualizar() ★']
+  },
+
+  main: {
+    badge:'Setup principal', badgeClass:'badge-teal',
+    title:'cannyEdge()',
+    sub:'El director de orquesta. Abre el video, llama a la calibración, crea ventanas y trackbars, instancia el tracker y la reserva, y ejecuta el loop infinito frame a frame.',
+    sections:[
+      {title:'Variables locales importantes', vars:[
+        {n:'cap', d:'El video abierto con cv.VideoCapture. Todo el loop lee frames de aquí.',
+         p:['→ se pasa como parámetro cap a calibrar_roi(cap)']},
+        {n:'fps / delay', d:'Frames por segundo del video. delay es el tiempo de espera entre frames para respetar la velocidad original.',
+         p:['→ delay se usa en cv.waitKey(delay) al final del loop']},
+        {n:'roi_poly', d:'El polígono del área de juego. Viene del return de calibrar_roi().',
+         p:['← viene del return de calibrar_roi(cap)','→ se pasa como parámetro a clasificar_bordes(roi_poly)','→ se usa en cv.fillPoly y cv.polylines dentro del loop']},
+        {n:'bordes', d:'El diccionario de bordes clasificados. Viene del return de clasificar_bordes().',
+         p:['← viene del return de clasificar_bordes(roi_poly)','→ se pasa como parámetro bordes a actualizar(centroides, reserva, bordes, bboxes, UMBRAL_BORDE)']},
+        {n:'reserva', d:'La instancia de ReservaBordes que gestiona los IDs durante todo el video.',
+         p:['→ se pasa como parámetro reserva a actualizar()','→ se llama reserva.reset() cuando el video termina']},
+        {n:'tracker', d:'La instancia de BlobTracker que hace el tracking frame a frame.',
+         p:['→ se llama tracker.actualizar(...) cada frame','→ se lee tracker.pares_fusionados para dibujar etiquetas','→ se llama tracker.reset() cuando el video termina']},
+        {n:'colors', d:'Array de 500 colores aleatorios. Cada ID tiene su color fijo calculado como colors[tid % 500].',
+         p:[]},
+        {n:'historial_areas', d:'Guarda el historial de tamaños de blob por ID. Se llena en el loop de dibujo con el área del frame actual.',
+         p:[]},
+        {n:'mostrar_filtros', d:'Variable global booleana. True = muestra la máscara binaria; False = muestra el video original con los IDs encima.',
+         p:[]},
+        {n:'blur_k / min_val / max_val / close_k / open_k / smooth_r', d:'Valores leídos de los trackbars cada frame. Controlan los filtros de imagen en tiempo real.',
+         p:['→ smooth_r se pasa como parámetro radio a suavizar_mask(mask, smooth_r)']},
+        {n:'mask', d:'La imagen binaria (blanco/negro) resultado de aplicar todos los filtros. El blanco son los blobs detectados.',
+         p:['→ se pasa como parámetro mask a suavizar_mask(mask, smooth_r)','← suavizar_mask() devuelve la máscara modificada y cannyEdge() la reasigna a mask']},
+        {n:'centroides / bboxes', d:'centroides: lista de (cx,cy) de cada blob válido. bboxes: dict {(cx,cy): (x1,y1,x2,y2,area)}.',
+         p:['→ ambos se pasan como parámetros a actualizar(centroides, reserva, bordes, bboxes, UMBRAL_BORDE)']},
+        {n:'video_terminado', d:'Flag para detectar el fin del video y reiniciarlo sin hacer doble reset.',
+         p:[]},
+      ]},
+      {title:'Conecta con', vars:[]},
+    ],
+    connects:['calibrar_roi()','clasificar_bordes()','ReservaBordes','BlobTracker','suavizar_mask()','actualizar()']
+  },
+
+  calibrar:{
+    badge:'Setup', badgeClass:'badge-teal',
+    title:'calibrar_roi(cap)',
+    sub:'Pantalla interactiva de configuración inicial. Muestra el primer frame del video y deja al usuario marcar las esquinas del área de juego con clics.',
+    sections:[
+      {title:'Parámetros y variables', vars:[
+        {n:'cap', d:'El video abierto del que se lee el primer frame para usarlo como fondo de calibración.',
+         p:['← entra como parámetro desde cannyEdge(), donde cap = cv.VideoCapture(VIDEO_PATH)']},
+        {n:'ret', d:'True si el frame se leyó bien. Si es False el video está roto y la función retorna None.',
+         p:[]},
+        {n:'frame', d:'El primer fotograma del video, usado como fondo para que el usuario vea dónde está marcando.',
+         p:[]},
+        {n:'win_cal', d:'Nombre de la ventana de calibración que abre OpenCV. OpenCV identifica ventanas por su nombre de cadena.',
+         p:[]},
+        {n:'display', d:'Copia del frame donde se dibujan los puntos y líneas encima, sin modificar el original.',
+         p:[]},
+        {n:'overlay', d:'Otra copia usada solo para el polígono semitransparente. Se mezcla con display usando addWeighted.',
+         p:[]},
+        {n:'puntos_roi', d:'Variable global (lista). Acumula los (x,y) que el usuario marca con clics. La llena mouse_callback.',
+         p:['← mouse_callback() escribe en esta lista global cada vez que el usuario hace clic izquierdo']},
+        {n:'key', d:'La tecla presionada en cada iteración. Enter confirma, Z deshace el último punto, R reinicia.',
+         p:[]},
+        {n:'return: roi_poly', d:'Array numpy con todos los puntos confirmados. Es el polígono del área de juego.',
+         p:['→ cannyEdge() lo recibe como roi_poly','→ roi_poly luego se pasa a clasificar_bordes(roi_poly)','→ roi_poly también se usa directamente en el loop para la máscara ROI']},
+      ]},
+      {title:'Conecta con', vars:[]},
+    ],
+    connects:['mouse_callback()','cannyEdge()']
+  },
+
+  clasificar:{
+    badge:'Setup', badgeClass:'badge-teal',
+    title:'clasificar_bordes(roi_poly)',
+    sub:'Recibe el polígono del área y le pone nombre a cada lado: superior, inferior, izquierdo o derecho. Se llama una sola vez al inicio.',
+    sections:[
+      {title:'Parámetros y variables', vars:[
+        {n:'roi_poly', d:'El polígono del área de juego como array numpy de puntos.',
+         p:['← entra como parámetro desde cannyEdge(), donde viene del return de calibrar_roi()']},
+        {n:'puntos', d:'Los mismos puntos convertidos a lista Python para poder recorrerlos en el for.',
+         p:[]},
+        {n:'n', d:'Cuántos puntos tiene el polígono (cuántos clics dio el usuario en la calibración).',
+         p:[]},
+        {n:'segmentos', d:'Lista de dicts, uno por cada lado del polígono. Cada dict tiene p1, p2 y el punto medio mx, my.',
+         p:[]},
+        {n:'p1, p2', d:'Los dos extremos de cada lado del polígono al recorrerlo.',
+         p:['→ se guardan en segmentos y luego en bordes[nombre][p1] y bordes[nombre][p2]','→ detectar_borde() los lee del diccionario bordes para pasarlos a punto_cerca_segmento(px, py, p1, p2, umbral)']},
+        {n:'mx, my', d:'Coordenadas del punto medio de cada lado. El de my más pequeño (más arriba en pantalla) es el borde superior, el mayor es el inferior, etc.',
+         p:[]},
+        {n:'bordes', d:'El diccionario resultado con claves: superior, inferior, izquierdo, derecho.',
+         p:['→ return: cannyEdge() lo recibe como bordes','→ se pasa como parámetro bordes a actualizar()','→ se pasa como parámetro bordes a detectar_borde()']},
+      ]},
+      {title:'Conecta con', vars:[]},
+    ],
+    connects:['cannyEdge()','detectar_borde()','actualizar()']
+  },
+
+  detectar:{
+    badge:'Helper runtime', badgeClass:'badge-coral',
+    title:'detectar_borde(cx, cy, bordes, umbral)',
+    sub:'Pregunta a cada borde del área si el punto (cx, cy) está cerca de él. Devuelve el nombre del borde o None si el blob está en el interior.',
+    sections:[
+      {title:'Parámetros y variables', vars:[
+        {n:'cx, cy', d:'Coordenadas del centro del blob a evaluar. cx = center x, cy = center y.',
+         p:['← en actualizar(): cx,cy vienen de centroides[di] para blobs sin asignar, o de ultima_cx/ultima_cy para tracks perdidos']},
+        {n:'bordes', d:'El diccionario con los 4 bordes clasificados.',
+         p:['← entra como parámetro desde actualizar(), donde viene del return de clasificar_bordes()']},
+        {n:'umbral', d:'Distancia máxima en píxeles para considerar que el blob toca ese borde.',
+         p:['← en actualizar() se pasa como umbral_borde, cuyo valor viene de UMBRAL_BORDE en config.py']},
+        {n:'nombre, seg', d:'Nombre del borde (ej: "inferior") y su dict {p1, p2, mx, my} al iterar bordes.',
+         p:['→ seg[p1] y seg[p2] se pasan como p1, p2 a punto_cerca_segmento(cx, cy, seg[p1], seg[p2], umbral)']},
+        {n:'return: nombre o None', d:'El nombre del borde si el blob está cerca de alguno, o None si está en el interior del área.',
+         p:['→ en actualizar() se recibe como borde_entrada o borde_salida','→ borde_entrada se pasa a reserva.registrar_entrada(borde_entrada)','→ borde_salida se pasa a reserva.registrar_salida(tid, borde_salida)']},
+      ]},
+      {title:'Conecta con', vars:[]},
+    ],
+    connects:['punto_cerca_segmento()','actualizar()','ReservaBordes']
+  },
+
+  punto:{
+    badge:'Helper runtime', badgeClass:'badge-coral',
+    title:'punto_cerca_segmento(px, py, p1, p2, umbral)',
+    sub:'Matemática pura: calcula si un punto está a menos de "umbral" píxeles de un segmento de línea. La usa detectar_borde() internamente.',
+    sections:[
+      {title:'Parámetros y variables', vars:[
+        {n:'px, py', d:'Las coordenadas del punto a evaluar.',
+         p:['← entra desde detectar_borde(), que pasa cx, cy del blob como px, py']},
+        {n:'p1, p2', d:'Los dos extremos del segmento de línea (un lado del polígono del área).',
+         p:['← entra desde detectar_borde(), que lee seg[p1] y seg[p2] del diccionario bordes']},
+        {n:'umbral', d:'Distancia máxima permitida en píxeles para decir "está cerca".',
+         p:['← entra desde detectar_borde(), que le pasa su propio parámetro umbral']},
+        {n:'x1,y1,x2,y2', d:'Los mismos p1 y p2 desempacados para hacer las operaciones matemáticas.',
+         p:[]},
+        {n:'dx, dy', d:'Diferencia en X e Y entre los dos extremos. Describe la dirección y longitud del segmento.',
+         p:[]},
+        {n:'largo2', d:'Longitud del segmento al cuadrado. Se usa al cuadrado para evitar una raíz cuadrada innecesaria.',
+         p:[]},
+        {n:'t', d:'Número entre 0 y 1 que indica en qué punto del segmento cae la proyección del blob. 0 = extremo p1, 1 = extremo p2.',
+         p:[]},
+        {n:'proj_x, proj_y', d:'Coordenadas del punto del segmento más cercano al blob.',
+         p:[]},
+        {n:'dist', d:'La distancia final entre el blob y ese punto más cercano del segmento.',
+         p:['→ se compara con umbral: si dist <= umbral devuelve True a detectar_borde(), que entonces sabe que ese blob está en ese borde']},
+      ]},
+      {title:'Conecta con', vars:[]},
+    ],
+    connects:['detectar_borde()']
+  },
+
+  suavizar:{
+    badge:'Helper runtime', badgeClass:'badge-coral',
+    title:'suavizar_mask(mask, radio)',
+    sub:'Redondea los bordes de los blobs con cierre morfológico elíptico. Dilata con forma circular primero y luego erode para conservar el área. Radio 0 = sin efecto.',
+    sections:[
+      {title:'Parámetros y variables', vars:[
+        {n:'mask', d:'La imagen binaria con los blobs ya detectados y recortados al ROI.',
+         p:['← entra como parámetro desde cannyEdge(), donde mask es la imagen resultante de MORPH_OPEN + ROI mask']},
+        {n:'radio', d:'El radio del kernel elíptico. Controla cuánto se redondean los bordes.',
+         p:['← entra como parámetro desde cannyEdge(), donde smooth_r viene del trackbar "Smooth" (0-20)']},
+        {n:'k', d:'El kernel elíptico generado con getStructuringElement(MORPH_ELLIPSE). Es la plantilla circular para la operación morfológica.',
+         p:[]},
+        {n:'mask_suave', d:'La máscara resultante con bordes redondeados.',
+         p:['→ return: cannyEdge() lo recibe de vuelta como mask y lo usa directamente en findContours']},
+      ]},
+      {title:'Conecta con', vars:[]},
+    ],
+    connects:['cannyEdge()']
+  },
+
+  predecir:{
+    badge:'Método del tracker', badgeClass:'badge-amber',
+    title:'_predecir()',
+    sub:'Antes de ver el nuevo frame, estima dónde estará cada blob sumando su velocidad a su posición actual. Opera directamente sobre self.tracks sin recibir parámetros.',
+    sections:[
+      {title:'Variables', vars:[
+        {n:'t', d:'Cada track del diccionario self.tracks al iterar sobre sus valores.',
+         p:[]},
+        {n:'cx_pred', d:'Posición X predicha: t[cx] + t[vx]. Se escribe en el track.',
+         p:["→ actualizar() lee t[cx_pred] cuando un track queda sin asignar, para mover su posición fantasma hacia donde se esperaba"]},
+        {n:'cy_pred', d:'Posición Y predicha: t[cy] + t[vy]. Se escribe en el track.',
+         p:["→ actualizar() lee t[cy_pred] de la misma forma que cx_pred"]},
+      ]},
+      {title:'Conecta con', vars:[]},
+    ],
+    connects:['actualizar() (la llama al inicio de cada frame)']
+  },
+
+  calcvel:{
+    badge:'Método del tracker', badgeClass:'badge-amber',
+    title:'_calcular_velocidad(historial)',
+    sub:'Promedia los últimos N desplazamientos del historial para obtener la velocidad actual. Recorta el resultado a MAX_VEL si es absurdamente alto.',
+    sections:[
+      {title:'Parámetros y variables', vars:[
+        {n:'historial', d:'Lista de las últimas posiciones (cx, cy) del blob.',
+         p:["← entra como parámetro desde actualizar(), que pasa t[historial] del track correspondiente"]},
+        {n:'vxs, vys', d:'Listas con los desplazamientos entre cada par de posiciones consecutivas del historial.',
+         p:[]},
+        {n:'vx, vy', d:'El promedio de todos esos desplazamientos. Es la velocidad calculada del blob.',
+         p:["→ return: actualizar() los asigna como t[vx], t[vy] del track tras la asignación exitosa","→ _predecir() los usará en el siguiente frame para calcular cx_pred/cy_pred"]},
+        {n:'MAX_VEL', d:'Límite de velocidad máxima por frame. Viene de config.py. Evita saltos absurdos por confusiones de blobs.',
+         p:['← viene de config.py como constante global importada con from config import *']},
+      ]},
+      {title:'Conecta con', vars:[]},
+    ],
+    connects:['actualizar()','_predecir()']
+  },
+
+  angulo:{
+    badge:'Método del tracker', badgeClass:'badge-amber',
+    title:'_angulo(vx, vy) y _diff_angulo(a1, a2)',
+    sub:'_angulo convierte un vector de velocidad a grados. _diff_angulo calcula la diferencia real entre dos ángulos considerando que son circulares (0° y 359° tienen solo 1° de diferencia).',
+    sections:[
+      {title:'_angulo — parámetros y variables', vars:[
+        {n:'vx, vy', d:'Los componentes del vector de velocidad.',
+         p:["← desde actualizar(): se llama dos veces. Una con t[vx],t[vy] del track (ang_track) y otra con el desplazamiento (cx-t[cx], cy-t[cy]) del blob detectado (ang_det)"]},
+        {n:'return: ángulo en grados', d:'El ángulo que forma ese vector respecto al eje X horizontal.',
+         p:['→ actualizar() lo recibe como ang_track y ang_det, y los pasa a _diff_angulo(ang_track, ang_det)']},
+      ]},
+      {title:'_diff_angulo — parámetros y variables', vars:[
+        {n:'a1, a2', d:'Los dos ángulos a comparar, en grados.',
+         p:['← entra desde actualizar(), que le pasa ang_track y ang_det (los devueltos por _angulo())']},
+        {n:'diff', d:'Diferencia bruta entre los dos ángulos con % 360 para quedar en el rango 0-360.',
+         p:[]},
+        {n:'return: diferencia real', d:'Siempre entre 0° y 180°. 0° = mismo rumbo exacto, 180° = rumbos opuestos.',
+         p:['→ actualizar() lo divide entre 180.0 para obtener ang_score (valor entre 0 y 1) que entra en la fórmula de scores']},
+      ]},
+      {title:'Conecta con', vars:[]},
+    ],
+    connects:['actualizar()']
+  },
+
+  agregar:{
+    badge:'Método del tracker', badgeClass:'badge-amber',
+    title:'agregar_track(track_id, cx, cy)',
+    sub:'Crea una entrada nueva en self.tracks para un blob recién detectado o recuperado de una fusión. Todos los campos se inicializan desde cero.',
+    sections:[
+      {title:'Parámetros y variables', vars:[
+        {n:'track_id', d:'El ID que se le asigna al nuevo track.',
+         p:['← entra desde actualizar(). Puede ser nuevo_id (ID nuevo o recuperado de la reserva) o id_recuperado (salió de una fusión activa)']},
+        {n:'cx, cy', d:'La posición inicial del blob en este frame.',
+         p:['← entra desde actualizar(), donde cx,cy vienen de centroides[di]']},
+        {n:'cx_pred, cy_pred', d:'Se inicializan igual a cx, cy porque aún no sabemos la dirección del blob.',
+         p:['→ _predecir() los actualizará en el siguiente frame usando vx y vy']},
+        {n:'vx, vy', d:'Velocidad inicial en cero porque el blob acaba de aparecer y no hay historial.',
+         p:['→ _calcular_velocidad() los calculará en el siguiente frame cuando el historial tenga al menos 2 posiciones']},
+        {n:'ultima_dir_x, ultima_dir_y', d:'Última dirección normalizada conocida. Empieza en 0,0 hasta que el blob se mueva lo suficiente.',
+         p:["→ actualizar() los escribe cuando vel_mag > 0.5 tras cada asignación exitosa","→ actualizar() los lee para calcular dir_score en la matriz de scores del siguiente frame"]},
+        {n:'historial', d:'Lista que empieza con [(cx, cy)]. Crece cada frame para poder calcular velocidad.',
+         p:['→ se pasa como parámetro historial a _calcular_velocidad(t[historial])']},
+        {n:'visible', d:'True: el blob se vio en el frame actual.',
+         p:['→ _actualizar_proximidad() filtra solo tracks con visible=True para comparar proximidad']},
+        {n:'edad_invisible', d:'Empieza en 0. Se incrementa cada frame que el tracker no encuentra este blob.',
+         p:["→ actualizar() lo compara con self.max_edad para decidir si el track muere y se borra de self.tracks"]},
+        {n:'area_hist', d:'Deque de máximo 20 valores con el historial de áreas (tamaños) del blob.',
+         p:['→ actualizar() calcula area_score comparando el área actual del blob detectado con np.mean(t[area_hist])']},
+      ]},
+      {title:'Conecta con', vars:[]},
+    ],
+    connects:['actualizar()','_predecir()','_calcular_velocidad()']
+  },
+
+  proximidad:{
+    badge:'Método del tracker', badgeClass:'badge-amber',
+    title:'_actualizar_proximidad(umbral_fusion)',
+    sub:'Cada frame revisa todos los pares de blobs visibles. Si dos llevan suficientes frames juntos los marca como fusionados. Si se separan, los desmarca.',
+    sections:[
+      {title:'Parámetros y variables', vars:[
+        {n:'umbral_fusion', d:'Distancia máxima en píxeles para considerar dos blobs "juntos".',
+         p:['← entra desde actualizar(), que le pasa UMBRAL_FUSION de config.py']},
+        {n:'tracks_visibles', d:'Lista de tuplas (tid, track) filtrando solo los que tienen visible=True en este frame.',
+         p:[]},
+        {n:'pares_cerca_ahora', d:'Set de pares (id_menor, id_mayor) que están cerca en este frame específico.',
+         p:[]},
+        {n:'par', d:'Tupla (id_menor, id_mayor) que identifica un par de blobs. Se usa como llave en self.frames_juntos.',
+         p:[]},
+        {n:'frames_juntos', d:'Dict en self que cuenta frames consecutivos cerca por par. Si un par deja de estar cerca, su contador se reinicia a 0.',
+         p:[]},
+        {n:'pares_fusionados', d:'Set en self de pares que superaron FRAMES_PARA_FUSION frames juntos. Son los "oficialmente fusionados".',
+         p:['→ cannyEdge() lo lee para dibujar etiquetas con formato [ID1, ID2] y grosor de borde mayor']},
+      ]},
+      {title:'Conecta con', vars:[]},
+    ],
+    connects:['actualizar() (la llama al final de cada frame)','cannyEdge() (lee pares_fusionados)']
+  },
+
+  posicion:{
+    badge:'Método del tracker', badgeClass:'badge-amber',
+    title:'_posicion_esperada(track_id, pasos)',
+    sub:'Proyecta dónde debería estar un blob ahora promediando sus últimos N desplazamientos. Más robusta que _predecir() para el cálculo del score de asignación.',
+    sections:[
+      {title:'Parámetros y variables', vars:[
+        {n:'track_id', d:'El ID del blob cuya posición queremos proyectar.',
+         p:['← entra desde actualizar(), que itera sobre ids_activos y pasa cada tid']},
+        {n:'pasos', d:'Cuántos desplazamientos anteriores usar en el promedio.',
+         p:['← actualizar() lo llama con pasos=3 fijo: self._posicion_esperada(tid, pasos=3)']},
+        {n:'h', d:'El historial de posiciones del track: self.tracks[track_id][historial].',
+         p:[]},
+        {n:'n', d:'min(pasos, len(h)-1). No puede pedir más desplazamientos de los que hay disponibles.',
+         p:[]},
+        {n:'dx, dy', d:'Promedio de los últimos n desplazamientos en X e Y.',
+         p:[]},
+        {n:'return: (px, py)', d:'La posición proyectada: posición actual del track + desplazamiento promedio.',
+         p:['→ actualizar() la recibe como px, py y calcula dist = sqrt((cx-px)²+(cy-py)²), que entra en la fórmula de scores']},
+      ]},
+      {title:'Conecta con', vars:[]},
+    ],
+    connects:['actualizar()']
+  },
+
+  actualizar:{
+    badge:'Método principal ★', badgeClass:'badge-amber',
+    title:'actualizar(centroides, reserva, bordes, bboxes, umbral_borde)',
+    sub:'La función más compleja. Se llama cada frame y orquesta 4 fases: asignación greedy, resolución de blobs sin asignar, gestión de tracks perdidos y limpieza. Ver diagrama aparte.',
+    sections:[
+      {title:'Parámetros de entrada', vars:[
+        {n:'centroides', d:'Lista de (cx, cy) de los blobs detectados en este frame.',
+         p:['← viene de cannyEdge(), donde se construye al recorrer los contornos de findContours']},
+        {n:'reserva', d:'La instancia de ReservaBordes para gestionar IDs.',
+         p:['← viene de cannyEdge(): reserva = ReservaBordes(max_ids=MAX_IDS)']},
+        {n:'bordes', d:'El diccionario de bordes clasificados para detectar entradas y salidas.',
+         p:['← viene de cannyEdge(): bordes = clasificar_bordes(roi_poly)']},
+        {n:'bboxes', d:'Dict de {(cx,cy): (x1,y1,x2,y2,area)}. Rectángulo y área de cada blob detectado.',
+         p:['← viene de cannyEdge(), construido junto con centroides al recorrer los contornos']},
+        {n:'umbral_borde', d:'Distancia en píxeles para considerar que un blob está en un borde.',
+         p:['← viene de cannyEdge() como UMBRAL_BORDE de config.py','→ se pasa como umbral a detectar_borde(cx, cy, bordes, umbral_borde)']},
+      ]},
+      {title:'Variables internas clave', vars:[
+        {n:'ids_activos', d:'Lista de todos los IDs que había en self.tracks al inicio de este frame.',
+         p:[]},
+        {n:'asignados_track / asignados_det', d:'Sets que registran qué tracks y qué detecciones ya fueron emparejados en este frame.',
+         p:[]},
+        {n:'scores', d:'Matriz 2D numpy [detecciones × tracks]. Cada celda es el costo de asignar ese blob a ese track. Se busca el mínimo iterativamente.',
+         p:['← se llena con valores calculados a partir de dist (de _posicion_esperada()), ang_score (de _diff_angulo()), area_score y dir_score']},
+        {n:'dist', d:'Distancia entre la posición proyectada y la posición real del blob detectado.',
+         p:['← viene del return de _posicion_esperada(tid, pasos=3)']},
+        {n:'ang_score', d:'Diferencia de dirección entre el track y el blob detectado. 0=mismo rumbo, 1=opuesto.',
+         p:['← viene del return de _diff_angulo(ang_track, ang_det)', '← donde ang_track y ang_det vienen de _angulo()']},
+        {n:'area_score', d:'Diferencia de tamaño entre el blob detectado y el promedio del historial de áreas del track.',
+         p:["← usa bboxes para el área actual del blob y np.mean(t[area_hist]) para el promedio del track"]},
+        {n:'dir_score', d:'Penalización si el blob parece moverse en dirección contraria a la última dirección conocida.',
+         p:['← usa UMBRAL_DIR_OPUESTA y PENALIZACION_DIR de config.py',"← usa t[ultima_dir_x] y t[ultima_dir_y] escritos por agregar_track() y actualizados en cada asignación"]},
+        {n:'nuevo_id / id_recuperado', d:'El ID que se asigna a un blob sin track. Puede venir de la reserva, de una fusión activa, o ser completamente nuevo.',
+         p:['→ se pasa como track_id a agregar_track(nuevo_id, cx, cy)','→ se pasa como track_id a reserva.confirmar_activo(nuevo_id)']},
+      ]},
+      {title:'Fases resumidas', vars:[
+        {n:'1. Greedy', d:'Construye la matriz de scores llamando a _posicion_esperada(), _angulo() y _diff_angulo(). Asigna cada blob al track más probable de uno en uno.', p:[]},
+        {n:'2. Sin asignar', d:'Blobs sin track: ¿vienen de una fusión activa? ¿entran por un borde (detectar_borde)? ¿se rescatan de un track invisible cercano?', p:[]},
+        {n:'3. Tracks perdidos', d:'Tracks sin blob asignado: se vuelven invisibles, acumulan edad_invisible, detectan absorción por blob cercano (fusiones_activas) o salida por borde (registrar_salida).', p:[]},
+        {n:'4. Limpieza', d:'Elimina de self.tracks todos los que tienen edad_invisible > max_edad, excepto los que están en fusiones_activas. Llama a _actualizar_proximidad() al final.', p:[]},
+      ]},
+      {title:'Conecta con', vars:[]},
+    ],
+    connects:['_predecir()','_posicion_esperada()','_calcular_velocidad()','_angulo()','_diff_angulo()','agregar_track()','detectar_borde()','ReservaBordes','_actualizar_proximidad()']
+  },
+
+  callbacks:{
+    badge:'Utilidad', badgeClass:'badge-gray',
+    title:'callback() y mouse_callback()',
+    sub:'Funciones de apoyo para OpenCV. No tienen lógica propia.',
+    sections:[
+      {title:'callback(val)', vars:[
+        {n:'val', d:'Valor del trackbar en el momento en que el usuario lo mueve. No se usa para nada dentro de la función.',
+         p:['← OpenCV lo pasa automáticamente al llamar al callback del trackbar']},
+      ]},
+      {title:'mouse_callback(event, x, y, flags, param)', vars:[
+        {n:'event', d:'Tipo de acción del mouse (clic izquierdo, movimiento, etc.).',
+         p:['← OpenCV lo pasa automáticamente cuando ocurre un evento en la ventana registrada']},
+        {n:'x, y', d:'Coordenadas del pixel en la ventana donde ocurrió el evento.',
+         p:['→ si event es EVENT_LBUTTONDOWN, x,y se añaden a la lista global puntos_roi']},
+        {n:'flags', d:'Información extra como si había Ctrl o Shift presionado al hacer el evento. No se usa aquí.',
+         p:[]},
+        {n:'param', d:'Datos adicionales opcionales que se pueden pasar al registrar el callback. No se usa aquí.',
+         p:[]},
+        {n:'puntos_roi', d:'Variable global (lista) donde se acumulan los puntos marcados.',
+         p:['→ calibrar_roi() lee esta lista global para dibujar el polígono en pantalla y para construir el return final']},
+      ]},
+      {title:'Conecta con', vars:[]},
+    ],
+    connects:['calibrar_roi() (le pasa mouse_callback a OpenCV con setMouseCallback)']
+  }
+};
+
+function show(key) {
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('nav-'+key).classList.add('active');
+  const d = data[key];
+  if (!d) return;
+
+  let html = `<div class="d-head">
+    <span class="d-badge ${d.badgeClass}">${d.badge}</span>
+    <div>
+      <div class="d-title">${d.title}</div>
+      <div class="d-sub">${d.sub}</div>
+    </div>
+  </div>`;
+
+  for (const s of d.sections) {
+    if (s.title === 'Conecta con') {
+      html += `<div class="divider"></div><div class="section-title">Conecta con</div><div class="connects-row">`;
+      for (const c of d.connects) html += `<span class="chip">${c}</span>`;
+      html += `</div>`;
+    } else if (s.vars.length) {
+      html += `<div class="section-title">${s.title}</div>`;
+      for (const v of s.vars) {
+        html += `<div class="var-block"><div class="var-row">
+          <span class="var-name">${v.n}</span>
+          <span class="var-desc">${v.d}</span>
+        </div>`;
+        if (v.p && v.p.length) {
+          html += `<div class="param-flow-col">`;
+          for (const flow of v.p) html += `<span class="param-flow">${flow}</span>`;
+          html += `</div>`;
+        }
+        html += `</div>`;
+      }
+    } else if (s.title !== 'Conecta con') {
+      html += `<div class="section-title">${s.title}</div>`;
+    }
+  }
+
+  document.getElementById('detail-panel').innerHTML = html;
+}
+
+show('reserva');
+</script>
+</body>
+</html>

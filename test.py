@@ -1,4 +1,4 @@
-# 12 de Marzo del 2026
+# Codigo Nuevo
 import cv2 as cv
 import numpy as np
 from collections import defaultdict, deque
@@ -227,6 +227,8 @@ class BlobTracker:
             'cx': cx, 'cy': cy,
             'cx_pred': cx, 'cy_pred': cy,
             'vx': 0.0, 'vy': 0.0,
+            'ultima_dir_x': 0.0,    
+            'ultima_dir_y': 0.0,    
             'historial': [(cx, cy)],
             'visible': True,
             'edad_invisible': 0,
@@ -259,6 +261,7 @@ class BlobTracker:
         for par, frames in self.frames_juntos.items():
             if frames >= FRAMES_PARA_FUSION:
                 self.pares_fusionados.add(par)
+                
         
 
     def actualizar(self, centroides, reserva, bordes, bboxes, umbral_borde=10):
@@ -296,14 +299,6 @@ class BlobTracker:
                     else:
                         ang_score = 0.0
 
-                    area_score = 0.0
-                    bbox_k = min(bboxes.keys(),
-                                 key=lambda k: abs(k[0]-cx) + abs(k[1]-cy),
-                                 default=None)
-                    if bbox_k and t['area_hist']:
-                        area_det  = bboxes[bbox_k][4]
-                        area_prom = np.mean(t['area_hist'])
-                        area_score = min(abs(area_det - area_prom) / (area_prom + 1e-5), 1.0)
 
                     area_score = 0.0
                     bbox_k = min(bboxes.keys(),
@@ -314,9 +309,30 @@ class BlobTracker:
                         area_prom = np.mean(t['area_hist'])
                         area_score = min(abs(area_det - area_prom) / (area_prom + 1e-5), 1.0)
 
-                    scores[di, ti] = (0.4 * (dist / self.max_dist) +
-                                      0.4 * ang_score          +
-                                      0.2 * area_score)
+                    dir_score = 0.0
+                    # Solo penalizar si el track NO está en una fusión activa
+                    tid_en_fusion = tid in self.fusiones_activas or any(
+                        any(e['id'] == tid for e in lista)
+                        for lista in self.fusiones_activas.values()
+                    )
+                    if not tid_en_fusion:
+                        bt_dir_x = t['ultima_dir_x']
+                        bt_dir_y = t['ultima_dir_y']
+                        if bt_dir_x != 0.0 or bt_dir_y != 0.0:
+                            mov_x = cx - t['cx']
+                            mov_y = cy - t['cy']
+                            mov_mag = np.sqrt(mov_x**2 + mov_y**2)
+                            if mov_mag > 1.0:
+                                mov_x /= mov_mag
+                                mov_y /= mov_mag
+                                producto = bt_dir_x * mov_x + bt_dir_y * mov_y
+                                if producto < UMBRAL_DIR_OPUESTA:
+                                    dir_score = PENALIZACION_DIR
+
+                    scores[di, ti] = (0.35 * (dist / self.max_dist) +
+                                      0.35 * ang_score          +
+                                      0.15 * area_score         +
+                                      0.15 * dir_score)
 
             while True:
                 if np.all(np.isinf(scores)):
@@ -336,6 +352,10 @@ class BlobTracker:
                 if len(t['historial']) > self.vel_history:
                     t['historial'].pop(0)
                 t['vx'], t['vy']    = self._calcular_velocidad(t['historial'])
+                vel_mag = np.sqrt(t['vx']**2 + t['vy']**2)
+                if vel_mag > 0.5:                          # ── NUEVO ──
+                    t['ultima_dir_x'] = t['vx'] / vel_mag  # ── NUEVO ──
+                    t['ultima_dir_y'] = t['vy'] / vel_mag  # ── NUEVO ──
                 t['cx']             = cx
                 t['cy']             = cy
                 t['visible']        = True
@@ -367,14 +387,21 @@ class BlobTracker:
                             fusion_origen = blob_id
 
                 if id_recuperado is not None:
-                    # Separación de fusión → elegir el ID cuya ultima_pos
-                    # esté más cerca del blob nuevo que apareció
                     candidatos = []
                     for blob_id, ids_absorbidas in list(self.fusiones_activas.items()):
                         for entrada in ids_absorbidas:
-                            ux, uy = entrada['ultima_pos']
-                            dist_a_ultima = np.sqrt((cx - ux)**2 + (cy - uy)**2)
-                            candidatos.append((dist_a_ultima, entrada['id'], blob_id))
+                            tid_abs = entrada['id']
+                            if tid_abs in self.tracks:
+                                ux, uy = entrada['ultima_pos']
+                                # Usar dirección guardada al momento de absorción
+                                dx = entrada.get('dir_x', 0.0)
+                                dy = entrada.get('dir_y', 0.0)
+                                px = ux + dx * self.max_dist
+                                py = uy + dy * self.max_dist
+                            else:
+                                px, py = entrada['ultima_pos']
+                            dist_proyectada = np.sqrt((cx - px)**2 + (cy - py)**2)
+                            candidatos.append((dist_proyectada, tid_abs, blob_id))
 
                     if candidatos:
                         candidatos.sort(key=lambda x: x[0])
@@ -454,7 +481,7 @@ class BlobTracker:
                 t['cy']  = t['cy_pred']
 
                 # Detectar absorción por blob cercano
-                if t['edad_invisible'] == 1:
+                if t['edad_invisible'] <= 3:
                     for blob_id_asignado in asignados_track:
                         bt           = self.tracks[blob_id_asignado]
                         dist_al_blob = np.sqrt((ultima_cx - bt['cx'])**2 +
@@ -467,6 +494,17 @@ class BlobTracker:
                                 dirigido = (t['vx'] * dir_x + t['vy'] * dir_y) >= 0
                                 if not dirigido:
                                     continue
+
+                            bt_dir_x = bt['ultima_dir_x']
+                            bt_dir_y = bt['ultima_dir_y']
+                            t_dir_x  = t['ultima_dir_x']
+                            t_dir_y  = t['ultima_dir_y']
+                            producto_punto = bt_dir_x * t_dir_x + bt_dir_y * t_dir_y
+                            direcciones_opuestas = producto_punto < -0.5
+                            if direcciones_opuestas and t['edad_invisible'] > 1:
+                                continue
+
+                            
                             if blob_id_asignado not in self.fusiones_activas:
                                 self.fusiones_activas[blob_id_asignado] = []
                             ya_absorbido     = any(
@@ -476,8 +514,10 @@ class BlobTracker:
                             ids_ya_guardadas = [e['id'] for e in self.fusiones_activas[blob_id_asignado]]
                             if tid not in ids_ya_guardadas and not ya_absorbido:
                                 self.fusiones_activas[blob_id_asignado].append({
-                                    'id':        tid,
-                                    'ultima_pos': (ultima_cx, ultima_cy)
+                                    'id':         tid,
+                                    'ultima_pos': (ultima_cx, ultima_cy),
+                                    'dir_x':      t['ultima_dir_x'],
+                                    'dir_y':      t['ultima_dir_y']
                                 })
                             break
 
@@ -509,8 +549,13 @@ class BlobTracker:
 
         self._actualizar_proximidad(umbral_fusion=UMBRAL_FUSION)
 
+        if self.fusiones_activas:
+            print(f"[FUSIONES] {dict({k: [e['id'] for e in v] for k, v in self.fusiones_activas.items()})}")
+
         return [(t['cx'], t['cy'], tid, t['vx'], t['vy'])
                 for tid, t in self.tracks.items() if t['visible']]
+    # Al final de actualizar(), antes del return
+  
     def _posicion_esperada(self, track_id, pasos=3):
         """Proyecta la posición esperada usando los últimos N desplazamientos."""
         h = self.tracks[track_id]['historial']
@@ -553,11 +598,22 @@ def cannyEdge():
     cv.moveWindow(win_video,    0,   0)
     cv.moveWindow(win_controls, 710, 0)
 
+    '''
     cv.createTrackbar('Blur',       win_controls, 5,  31,  callback)
     cv.createTrackbar('Min_thresh', win_controls, 0,  255, callback)
     cv.createTrackbar('Max_thresh', win_controls, 45, 255, callback)
     cv.createTrackbar('Close',      win_controls, 17, 20,  callback)
     cv.createTrackbar('Open',       win_controls, 3,  20,  callback)
+
+    
+    '''
+
+
+    cv.createTrackbar('Blur',       win_controls, 10,  31,  callback)
+    cv.createTrackbar('Min_thresh', win_controls, 0,  255, callback)
+    cv.createTrackbar('Max_thresh', win_controls, 45, 255, callback)
+    cv.createTrackbar('Close',      win_controls, 17, 20,  callback)
+    cv.createTrackbar('Open',       win_controls, 6,  20,  callback)
 
     cv.imshow(win_controls, np.zeros((100, 400), dtype=np.uint8))
 

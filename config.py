@@ -20,15 +20,16 @@ MAX_EDAD_INVISIBLE = 350        # Frames que un track "fantasma" sobrevive
 VEL_HISTORY = 10                # Frames usados para promediar la velocidad
                                 # Valores bajos = reacción rápida pero nerviosa
                                 # Valores altos = suavizado pero lento
-MAX_DIST = 30                   # Distancia máxima en px para asociar un blob
+MAX_DIST = 25                   # Distancia máxima en px para asociar un blob
                                 # a un track existente en el greedy
 PESO_DIST = 0.4                 # Peso de la distancia en el score de asociación
 PESO_ANGULO = 0.6               # Peso de la dirección en el score de asociación
                                 # PESO_DIST + PESO_ANGULO deben sumar 1.0
 
 
+
 # ── DETECCIÓN DE FUSIÓN POR PROXIMIDAD ────────
-UMBRAL_FUSION = 40              # Distancia en px entre dos centroides para
+UMBRAL_FUSION = 28              # Distancia en px entre dos centroides para
                                 # considerarlos "fusionados"
 FRAMES_PARA_FUSION = 3          # Frames consecutivos juntos para confirmar fusión
 
@@ -65,7 +66,7 @@ OPEN_INIT = 3                   # Tamaño inicial del kernel de apertura morfol�
 
 
 # ── DETECCIÓN DE CONTORNOS ────────────────────
-AREA_MIN_CONTORNO = 400         # Área mínima en px² para considerar un contorno
+AREA_MIN_CONTORNO = 300         # Área mínima en px² para considerar un contorno
                                 # como blob válido. Subir para filtrar más ruido.
 
 
@@ -80,3 +81,12 @@ WIN_CONTROLS_H = 200            # Alto de la ventana de controles
 WIN_CONTROLS_X = 710            # Posición X de la ventana de controles
 WIN_VIDEO_X    = 0              # Posición X de la ventana de video
 WIN_VIDEO_Y    = 0              # Posición Y de la ventana de video
+
+
+# ── GREEDY ────────────────────────────────────
+UMBRAL_DIR_OPUESTA = -0.3       # Producto punto mínimo para considerar
+                                # direcciones opuestas en el score
+                                # -1.0 = exactamente opuestos
+                                # -0.3 = más de 107 grados de diferencia
+PENALIZACION_DIR   = 0.5        # Penalización aplicada al score cuando
+                                # el movimiento va en dirección contraria

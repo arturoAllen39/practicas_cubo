@@ -1,7 +1,8 @@
-# 12 de Marzo del 2026
+# Codigo viejo
 import cv2 as cv
 import numpy as np
 from collections import defaultdict, deque
+from config import *
 
 mostrar_filtros = True
 puntos_roi = []
@@ -216,7 +217,7 @@ class BlobTracker:
         vys = [historial[i][1] - historial[i-1][1] for i in range(1, len(historial))]
         vx = float(np.mean(vxs))
         vy = float(np.mean(vys))
-        MAX_VEL = 3
+        
         vx = max(-MAX_VEL, min(MAX_VEL, vx))
         vy = max(-MAX_VEL, min(MAX_VEL, vy))
         return vx, vy
@@ -226,9 +227,12 @@ class BlobTracker:
             'cx': cx, 'cy': cy,
             'cx_pred': cx, 'cy_pred': cy,
             'vx': 0.0, 'vy': 0.0,
+            'ultima_dir_x': 0.0,
+            'ultima_dir_y': 0.0,
             'historial': [(cx, cy)],
             'visible': True,
-            'edad_invisible': 0
+            'edad_invisible': 0,
+            'area_hist': deque(maxlen=20)   
         }
 
     def _actualizar_proximidad(self, umbral_fusion=40):
@@ -255,10 +259,11 @@ class BlobTracker:
 
         # Pares estables → marcar como fusionados
         for par, frames in self.frames_juntos.items():
-            if frames >= 3:
+            if frames >= FRAMES_PARA_FUSION:
                 self.pares_fusionados.add(par)
+        
 
-    def actualizar(self, centroides, reserva, bordes, umbral_borde=10):
+    def actualizar(self, centroides, reserva, bordes, bboxes, umbral_borde=10):
         self._predecir()
 
         ids_activos     = list(self.tracks.keys())
@@ -271,8 +276,8 @@ class BlobTracker:
             for di, (cx, cy) in enumerate(centroides):
                 for ti, tid in enumerate(ids_activos):
                     t    = self.tracks[tid]
-                    dist = np.sqrt((cx - t['cx_pred'])**2 +
-                                   (cy - t['cy_pred'])**2)
+                    px, py = self._posicion_esperada(tid, pasos=3)
+                    dist   = np.sqrt((cx - px)**2 + (cy - py)**2)
 
                     # IDs absorbidos en fusión no participan en el greedy
                     ids_absorbidos_global = set()
@@ -293,8 +298,50 @@ class BlobTracker:
                     else:
                         ang_score = 0.0
 
-                    scores[di, ti] = (self.peso_dist   * (dist / self.max_dist) +
-                                      self.peso_angulo * ang_score)
+                    area_score = 0.0
+                    bbox_k = min(bboxes.keys(),
+                                 key=lambda k: abs(k[0]-cx) + abs(k[1]-cy),
+                                 default=None)
+                    if bbox_k and t['area_hist']:
+                        area_det  = bboxes[bbox_k][4]
+                        area_prom = np.mean(t['area_hist'])
+                        area_score = min(abs(area_det - area_prom) / (area_prom + 1e-5), 1.0)
+
+                    area_score = 0.0
+                    bbox_k = min(bboxes.keys(),
+                                 key=lambda k: abs(k[0]-cx) + abs(k[1]-cy),
+                                 default=None)
+                    if bbox_k and t['area_hist']:
+                        area_det  = bboxes[bbox_k][4]
+                        area_prom = np.mean(t['area_hist'])
+                        area_score = min(abs(area_det - area_prom) / (area_prom + 1e-5), 1.0)
+
+                    scores[di, ti] = (0.4 * (dist / self.max_dist) +
+                                      0.4 * ang_score          +
+                                      0.2 * area_score)
+                    dir_score = 0.0
+                    tid_en_fusion = tid in self.fusiones_activas or any(
+                        any(e['id'] == tid for e in lista)
+                        for lista in self.fusiones_activas.values()
+                    )
+                    if not tid_en_fusion:
+                        bt_dir_x = t['ultima_dir_x']
+                        bt_dir_y = t['ultima_dir_y']
+                        if bt_dir_x != 0.0 or bt_dir_y != 0.0:
+                            mov_x = cx - t['cx']
+                            mov_y = cy - t['cy']
+                            mov_mag = np.sqrt(mov_x**2 + mov_y**2)
+                            if mov_mag > 1.0:
+                                mov_x /= mov_mag
+                                mov_y /= mov_mag
+                                producto = bt_dir_x * mov_x + bt_dir_y * mov_y
+                                if producto < UMBRAL_DIR_OPUESTA:
+                                    dir_score = PENALIZACION_DIR
+
+                    scores[di, ti] = (0.35 * (dist / self.max_dist) +
+                                    0.35 * ang_score          +
+                                    0.15 * area_score         +
+                                    0.15 * dir_score)
 
             while True:
                 if np.all(np.isinf(scores)):
@@ -314,10 +361,20 @@ class BlobTracker:
                 if len(t['historial']) > self.vel_history:
                     t['historial'].pop(0)
                 t['vx'], t['vy']    = self._calcular_velocidad(t['historial'])
+                vel_mag = np.sqrt(t['vx']**2 + t['vy']**2)
+                if vel_mag > 0.5:
+                    t['ultima_dir_x'] = t['vx'] / vel_mag
+                    t['ultima_dir_y'] = t['vy'] / vel_mag
                 t['cx']             = cx
                 t['cy']             = cy
                 t['visible']        = True
                 t['edad_invisible'] = 0
+                # Guardar área actual en el historial del track
+                bbox_k = min(bboxes.keys(),
+                             key=lambda k: abs(k[0]-cx) + abs(k[1]-cy),
+                             default=None)
+                if bbox_k and bbox_k in bboxes:
+                    t['area_hist'].append(bboxes[bbox_k][4])
 
         # Detecciones sin asignar → revisar si vienen de fusión o entran por borde
         for di, (cx, cy) in enumerate(centroides):
@@ -339,7 +396,19 @@ class BlobTracker:
                             fusion_origen = blob_id
 
                 if id_recuperado is not None:
-                    # Separación de fusión → recuperar ID absorbido
+                    # Separación de fusión → elegir el ID cuya ultima_pos
+                    # esté más cerca del blob nuevo que apareció
+                    candidatos = []
+                    for blob_id, ids_absorbidas in list(self.fusiones_activas.items()):
+                        for entrada in ids_absorbidas:
+                            ux, uy = entrada['ultima_pos']
+                            dist_a_ultima = np.sqrt((cx - ux)**2 + (cy - uy)**2)
+                            candidatos.append((dist_a_ultima, entrada['id'], blob_id))
+
+                    if candidatos:
+                        candidatos.sort(key=lambda x: x[0])
+                        _, id_recuperado, fusion_origen = candidatos[0]
+
                     for fid in list(self.fusiones_activas.keys()):
                         self.fusiones_activas[fid] = [
                             e for e in self.fusiones_activas[fid] if e['id'] != id_recuperado
@@ -356,11 +425,11 @@ class BlobTracker:
                 if not borde_entrada:
                     # Blob lejos de bordes → intentar rescate de track cercano
                     mejor_rescue      = None
-                    mejor_dist_rescue = self.max_dist * 4
+                    mejor_dist_rescue = self.max_dist * MULT_DIST_RESCATE
                     for tid_r, t_r in self.tracks.items():
                         if tid_r in asignados_track:
                             continue
-                        if t_r['edad_invisible'] > 5:
+                        if t_r['edad_invisible'] > MAX_EDAD_RESCATE:
                             continue
                         dist_r = np.sqrt((cx - t_r['cx'])**2 + (cy - t_r['cy'])**2)
                         if dist_r < mejor_dist_rescue:
@@ -408,8 +477,8 @@ class BlobTracker:
                 ultima_cx = t['cx']
                 ultima_cy = t['cy']
 
-                t['vx'] *= 0.50
-                t['vy'] *= 0.50
+                t['vx'] *= FACTOR_AMORTIGUACION
+                t['vy'] *= FACTOR_AMORTIGUACION
                 t['cx']  = t['cx_pred']
                 t['cy']  = t['cy_pred']
 
@@ -419,11 +488,11 @@ class BlobTracker:
                         bt           = self.tracks[blob_id_asignado]
                         dist_al_blob = np.sqrt((ultima_cx - bt['cx'])**2 +
                                                (ultima_cy - bt['cy'])**2)
-                        if dist_al_blob < self.max_dist * 3:
+                        if dist_al_blob < self.max_dist * MULT_DIST_ABSORCION:
                             dir_x          = bt['cx'] - ultima_cx
                             dir_y          = bt['cy'] - ultima_cy
                             dist_inmediata = np.sqrt(dir_x**2 + dir_y**2)
-                            if dist_inmediata > self.max_dist * 3:
+                            if dist_inmediata > self.max_dist * MULT_DIST_ABSORCION:
                                 dirigido = (t['vx'] * dir_x + t['vy'] * dir_y) >= 0
                                 if not dirigido:
                                     continue
@@ -467,10 +536,20 @@ class BlobTracker:
         for tid in muertos:
             del self.tracks[tid]
 
-        self._actualizar_proximidad(umbral_fusion=40)
+        self._actualizar_proximidad(umbral_fusion=UMBRAL_FUSION)
 
         return [(t['cx'], t['cy'], tid, t['vx'], t['vy'])
                 for tid, t in self.tracks.items() if t['visible']]
+    def _posicion_esperada(self, track_id, pasos=3):
+        """Proyecta la posición esperada usando los últimos N desplazamientos."""
+        h = self.tracks[track_id]['historial']
+        if len(h) < 2:
+            return self.tracks[track_id]['cx'], self.tracks[track_id]['cy']
+        # Promedio de los últimos 'pasos' desplazamientos
+        n = min(pasos, len(h) - 1)
+        dx = np.mean([h[-(i+1)][0] - h[-(i+2)][0] for i in range(n)])
+        dy = np.mean([h[-(i+1)][1] - h[-(i+2)][1] for i in range(n)])
+        return int(self.tracks[track_id]['cx'] + dx), int(self.tracks[track_id]['cy'] + dy)
 
 
 # ─────────────────────────────────────────────
@@ -479,7 +558,7 @@ class BlobTracker:
 def cannyEdge():
     global mostrar_filtros
 
-    cap = cv.VideoCapture('video3.mp4')
+    cap = cv.VideoCapture(VIDEO_PATH)
     fps   = cap.get(cv.CAP_PROP_FPS)
     delay = int(1000 / fps) if fps > 0 else 30
     if not cap.isOpened():
@@ -492,7 +571,7 @@ def cannyEdge():
         return
 
     bordes  = clasificar_bordes(roi_poly)
-    reserva = ReservaBordes(max_ids=21)
+    reserva = ReservaBordes(max_ids=MAX_IDS)
 
     win_video    = 'Video'
     win_controls = 'Controles'
@@ -512,18 +591,18 @@ def cannyEdge():
     cv.imshow(win_controls, np.zeros((100, 400), dtype=np.uint8))
 
     tracker = BlobTracker(
-        max_edad_invisible = 350,
-        vel_history        = 10,
-        max_dist           = 30,
-        peso_dist          = 0.4,
-        peso_angulo        = 0.6
+        max_edad_invisible = MAX_EDAD_INVISIBLE,
+        vel_history        = VEL_HISTORY,
+        max_dist           = MAX_DIST,
+        peso_dist          = PESO_DIST,
+        peso_angulo        = PESO_ANGULO
     )
 
     np.random.seed(42)
     colors          = np.random.randint(0, 255, size=(500, 3), dtype=np.uint8)
     historial_areas = defaultdict(list)
-    MAX_HISTORIAL   = 50
-    UMBRAL_BORDE    = 10
+    MAX_HISTORIAL   = MAX_HISTORIAL_AREAS
+    # UMBRAL_BORDE    = 10  
     video_terminado = False
 
     print("Presiona [F] para alternar entre vista original y con filtros")
@@ -570,7 +649,7 @@ def cannyEdge():
         bboxes     = {}
         for cnt in contours:
             area = cv.contourArea(cnt)
-            if area < 400:
+            if area < AREA_MIN_CONTORNO:
                 continue
             x, y, w, h = cv.boundingRect(cnt)
             cx = x + w // 2
@@ -578,7 +657,7 @@ def cannyEdge():
             centroides.append((cx, cy))
             bboxes[(cx, cy)] = (x, y, x + w, y + h, area)
 
-        resultado = tracker.actualizar(centroides, reserva, bordes, UMBRAL_BORDE)
+        resultado = tracker.actualizar(centroides, reserva, bordes, bboxes, UMBRAL_BORDE)
 
         display = cv.cvtColor(mask, cv.COLOR_GRAY2BGR) if mostrar_filtros else frame.copy()
         cv.polylines(display, [roi_poly], isClosed=True, color=(0, 255, 255), thickness=2)
