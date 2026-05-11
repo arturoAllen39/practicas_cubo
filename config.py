@@ -5,7 +5,7 @@
 
 
 # ── VIDEO ─────────────────────────────────────
-VIDEO_PATH = 'video3.mp4'       # Ruta del video a procesar
+VIDEO_PATH = 'video2.mp4'       # Ruta del video a procesar
 
 
 # ── ÁREA DE JUEGO ─────────────────────────────
@@ -35,7 +35,7 @@ FRAMES_PARA_FUSION = 3          # Frames consecutivos juntos para confirmar fusi
 
 
 # ── DETECCIÓN DE ABSORCIÓN (fusiones_activas) ─
-MULT_DIST_ABSORCION = 3         # Multiplicador de MAX_DIST para detectar si
+MULT_DIST_ABSORCION = 2.5         # Multiplicador de MAX_DIST para detectar si
                                 # un blob fue absorbido por otro cercano
                                 # Radio efectivo = MAX_DIST * MULT_DIST_ABSORCION
 
@@ -90,3 +90,37 @@ UMBRAL_DIR_OPUESTA = -0.3       # Producto punto mínimo para considerar
                                 # -0.3 = más de 107 grados de diferencia
 PENALIZACION_DIR   = 0.5        # Penalización aplicada al score cuando
                                 # el movimiento va en dirección contraria
+
+
+# ── CONTACTO FÍSICO DE BBOXES ─────────────────
+UMBRAL_CONTACTO_BBOX = 4   # Píxeles de margen alrededor de cada bbox
+                            # para considerar que dos blobs "se tocan".
+                            # 0 = requiere solapamiento real.
+                            # 8-15 = captura el momento justo antes de
+                            # que los blobs se mezclen visualmente.
+
+
+# ── CONTACTO FÍSICO DE BBOXES ─────────────────
+UMBRAL_CONTACTO_BBOX       = 2      # Reducido: solo detecta contacto real,
+                                    # no proximidad. 0 = solapamiento puro.
+FRAMES_MIN_CONTACTO        = 4      # Frames consecutivos de contacto antes
+                                    # de tratarlo como fusión real. Evita
+                                    # falsos positivos de un solo frame.
+FACTOR_AMORTIGUACION_CAPSULA = 0.97 # Factor de desaceleración de la predicción
+                                    # de cápsulas. Mucho más suave que
+                                    # FACTOR_AMORTIGUACION (0.50) porque las
+                                    # fusiones pueden durar 100+ frames.
+
+
+FRAMES_COOLDOWN_CONTACTO = 6   # Frames de gracia antes de descartar un contacto
+                                # no confirmado. Si el par reaparece dentro de
+                                # este margen, retoma el contador acumulado.
+                                # Aumentar si los blobs oscilan mucho en el umbral.
+
+
+# ── CONTACTO FÍSICO DE BBOXES ─────────────────
+FACTOR_SEPARACION = 2.0    # Distancia en "speeds" a la que se predice la
+                            # cápsula invisible respecto al blob visible.
+                            # Con speed=3px/frame y factor=3: predice 9px
+                            # en la dirección original de la cápsula.
+                            # Subir si las personas se separan abruptamente.

@@ -2,622 +2,1010 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Mapa Completo — Cubo Negro Tracking</title>
+<title>Arquitectura: test2.py — Blob Tracker</title>
 <style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Rajdhani:wght@400;600;700&display=swap');
+
   :root {
-    --bg-primary: #ffffff;
-    --bg-secondary: #f5f4f0;
-    --text-primary: #1a1a18;
-    --text-secondary: #5f5e5a;
-    --text-tertiary: #888780;
-    --border: rgba(0,0,0,0.12);
-    --border-hover: rgba(0,0,0,0.25);
-    --color-info: #185FA5;
-    --param-bg: #E1F5EE;
-    --param-border: #1D9E75;
-    --param-text: #085041;
-    --font: system-ui, -apple-system, sans-serif;
-    --font-mono: 'Fira Mono', 'Consolas', monospace;
-    --radius-md: 8px;
-    --radius-lg: 12px;
+    --bg:       #080c14;
+    --bg2:      #0d1220;
+    --grid:     #111827;
+    --entry-bg: #1a0a0a; --entry-bd: #ef4444; --entry-glow: #ef444440;
+    --glob-bg:  #0e0a1f; --glob-bd:  #8b5cf6; --glob-glow:  #8b5cf640;
+    --cls-bg:   #07131f; --cls-bd:   #0ea5e9; --cls-glow:   #0ea5e940;
+    --pub-bg:   #071a0f; --pub-bd:   #22c55e; --pub-glow:   #22c55e40;
+    --priv-bg:  #1a1007; --priv-bd:  #f59e0b; --priv-glow:  #f59e0b40;
+    --var-bg:   #101a07; --var-bd:   #84cc16; --var-glow:   #84cc1640;
+    --res-bg:   #07131f; --res-bd:   #38bdf8; --res-glow:   #38bdf840;
+    --arrow-call: #475569;
+    --arrow-data: #fbbf24;
+    --arrow-ret:  #a78bfa;
+    --text:     #e2e8f0;
+    --text-dim: #64748b;
+    --text-code:#93c5fd;
+    --tooltip-bg: #0f172a;
+    --tooltip-bd: #334155;
   }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg-primary: #1e1e1c;
-      --bg-secondary: #2a2a28;
-      --text-primary: #e8e6de;
-      --text-secondary: #a8a69e;
-      --text-tertiary: #6e6c66;
-      --border: rgba(255,255,255,0.1);
-      --border-hover: rgba(255,255,255,0.22);
-      --color-info: #85B7EB;
-      --param-bg: #085041;
-      --param-border: #5DCAA5;
-      --param-text: #9FE1CB;
-    }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text);
+    overflow: hidden;
+    user-select: none;
   }
-  body { font-family: var(--font); background: var(--bg-secondary); color: var(--text-primary); min-height: 100vh; padding: 24px; }
-  h1 { font-size: 18px; font-weight: 500; margin-bottom: 4px; }
-  .page-sub { font-size: 13px; color: var(--text-secondary); margin-bottom: 20px; line-height: 1.6; }
-  .root { display: flex; min-height: 580px; border: 0.5px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; background: var(--bg-primary); }
-  .sidebar { width: 230px; flex-shrink: 0; border-right: 0.5px solid var(--border); overflow-y: auto; background: var(--bg-secondary); }
-  .sidebar-section { padding: 8px 0; }
-  .sidebar-label { font-size: 11px; font-weight: 500; color: var(--text-tertiary); padding: 6px 14px 4px; letter-spacing: .05em; text-transform: uppercase; }
-  .nav-item { display: flex; align-items: center; gap: 8px; padding: 7px 14px; cursor: pointer; font-size: 13px; color: var(--text-secondary); border-left: 2px solid transparent; transition: all .15s; user-select: none; }
-  .nav-item:hover { background: var(--bg-primary); color: var(--text-primary); }
-  .nav-item.active { background: var(--bg-primary); color: var(--text-primary); border-left-color: var(--text-primary); }
-  .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-  .dot-purple { background: #7F77DD; } .dot-teal { background: #1D9E75; } .dot-coral { background: #D85A30; } .dot-amber { background: #BA7517; } .dot-gray { background: #888780; }
-  .detail { flex: 1; padding: 22px 26px; overflow-y: auto; background: var(--bg-primary); }
-  .d-head { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 18px; }
-  .d-badge { font-size: 11px; font-weight: 500; padding: 3px 9px; border-radius: 4px; white-space: nowrap; flex-shrink: 0; margin-top: 3px; }
-  .badge-purple { background: #EEEDFE; color: #3C3489; } .badge-teal { background: #E1F5EE; color: #085041; } .badge-coral { background: #FAECE7; color: #712B13; } .badge-gray { background: #F1EFE8; color: #444441; } .badge-amber { background: #FAEEDA; color: #633806; }
-  @media (prefers-color-scheme: dark) {
-    .badge-purple { background: #3C3489; color: #CECBF6; } .badge-teal { background: #085041; color: #9FE1CB; } .badge-coral { background: #712B13; color: #F5C4B3; } .badge-gray { background: #444441; color: #D3D1C7; } .badge-amber { background: #633806; color: #FAC775; }
+
+  /* ── TOP BAR ─────────────────────────────────── */
+  #topbar {
+    position: fixed; top: 0; left: 0; right: 0; height: 52px;
+    background: #0a0f1e;
+    border-bottom: 1px solid #1e2d45;
+    display: flex; align-items: center; gap: 20px;
+    padding: 0 20px;
+    z-index: 1000;
+    backdrop-filter: blur(10px);
   }
-  .d-title { font-size: 16px; font-weight: 500; line-height: 1.3; }
-  .d-sub { font-size: 13px; color: var(--text-secondary); margin-top: 4px; line-height: 1.6; }
-  .section-title { font-size: 11px; font-weight: 500; color: var(--text-tertiary); letter-spacing: .05em; text-transform: uppercase; margin: 18px 0 10px; }
-  .var-block { margin-bottom: 11px; padding-bottom: 11px; border-bottom: 0.5px solid var(--border); }
-  .var-block:last-child { border-bottom: none; margin-bottom: 0; }
-  .var-row { display: grid; grid-template-columns: auto 1fr; gap: 5px 14px; align-items: start; }
-  .var-name { font-size: 12px; font-family: var(--font-mono); color: var(--color-info); white-space: nowrap; padding-top: 2px; }
-  .var-desc { font-size: 13px; color: var(--text-secondary); line-height: 1.55; }
-  .param-flow-col { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; margin-left: 28px; }
-  .param-flow { display: inline-flex; align-items: flex-start; gap: 5px; font-size: 11px; font-weight: 500; color: var(--param-text); background: var(--param-bg); border: 0.5px solid var(--param-border); border-radius: 4px; padding: 3px 8px; line-height: 1.45; }
-  .connects-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
-  .chip { font-size: 12px; padding: 3px 9px; border-radius: 4px; border: 0.5px solid var(--border-hover); color: var(--text-secondary); }
-  .divider { height: 0.5px; background: var(--border); margin: 16px 0; }
-  .legend { display: flex; flex-wrap: wrap; gap: 16px; padding: 10px 16px; border-top: 0.5px solid var(--border); background: var(--bg-secondary); margin-top: 16px; border-radius: var(--radius-md); }
-  .leg-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); }
-  .param-legend-tag { font-size: 11px; font-weight: 500; color: var(--param-text); background: var(--param-bg); border: 0.5px solid var(--param-border); border-radius: 4px; padding: 1px 7px; }
+  #topbar .title {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 18px; font-weight: 700;
+    color: #e2e8f0;
+    letter-spacing: 0.08em;
+  }
+  #topbar .subtitle { font-size: 10px; color: var(--text-dim); }
+  #legend {
+    display: flex; gap: 14px; margin-left: auto; align-items: center;
+    flex-wrap: wrap;
+  }
+  .leg-item { display: flex; align-items: center; gap: 5px; font-size: 10px; color: var(--text-dim); }
+  .leg-dot { width: 10px; height: 10px; border-radius: 2px; border: 1px solid; }
+  .leg-line { width: 24px; height: 2px; }
+  #hint { font-size: 9px; color: #374151; margin-left: 10px; }
+
+  /* ── CANVAS WRAPPER ─────────────────────────── */
+  #canvas-wrapper {
+    position: fixed; top: 52px; left: 0; right: 0; bottom: 0;
+    overflow: auto;
+    cursor: grab;
+  }
+  #canvas-wrapper.dragging { cursor: grabbing; }
+
+  #canvas {
+    position: relative;
+    width: 2400px;
+    min-height: 3000px;
+    background-color: var(--bg);
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  /* ── SVG ARROWS ─────────────────────────────── */
+  #svg-overlay {
+    position: absolute; top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* ── NODES ───────────────────────────────────── */
+  .node {
+    position: absolute;
+    border-radius: 6px;
+    border: 1px solid;
+    padding: 0;
+    z-index: 10;
+    transition: box-shadow 0.2s, transform 0.1s;
+    cursor: pointer;
+    min-width: 270px;
+  }
+  .node:hover { z-index: 50; }
+  .node.highlighted { z-index: 60; }
+
+  .node-header {
+    padding: 8px 12px 7px;
+    border-radius: 5px 5px 0 0;
+    display: flex; align-items: center; gap: 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .node-icon { font-size: 13px; }
+  .node-name {
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 700; font-size: 13px;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+    flex: 1;
+  }
+  .node-badge {
+    font-size: 9px; padding: 1px 5px;
+    border-radius: 3px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+  }
+  .node-body { padding: 8px 12px 10px; }
+
+  .param-line {
+    font-size: 10px; color: var(--text-dim);
+    line-height: 1.7;
+    display: flex; gap: 4px; align-items: baseline;
+  }
+  .param-name { color: #93c5fd; }
+  .param-type { color: #a78bfa; font-size: 9px; }
+  .param-origin { color: #6b7280; font-size: 9px; font-style: italic; }
+  .return-line {
+    font-size: 10px; margin-top: 5px; padding-top: 5px;
+    border-top: 1px solid rgba(255,255,255,0.05);
+    color: #a78bfa;
+  }
+  .calls-line {
+    font-size: 9px; color: #4b5563;
+    margin-top: 4px;
+    line-height: 1.5;
+  }
+
+  /* Node types */
+  .node-entry  { background: var(--entry-bg); border-color: var(--entry-bd); }
+  .node-entry:hover  { box-shadow: 0 0 20px var(--entry-glow); }
+  .node-entry .node-header  { background: rgba(239,68,68,0.12); }
+  .node-entry .node-name    { color: #fca5a5; }
+  .node-entry .node-badge   { background: rgba(239,68,68,0.2); color: #fca5a5; }
+
+  .node-global { background: var(--glob-bg); border-color: var(--glob-bd); }
+  .node-global:hover { box-shadow: 0 0 20px var(--glob-glow); }
+  .node-global .node-header { background: rgba(139,92,246,0.12); }
+  .node-global .node-name   { color: #c4b5fd; }
+  .node-global .node-badge  { background: rgba(139,92,246,0.2); color: #c4b5fd; }
+
+  .node-vars   { background: var(--var-bg);  border-color: var(--var-bd); }
+  .node-vars:hover  { box-shadow: 0 0 20px var(--var-glow); }
+  .node-vars .node-header  { background: rgba(132,204,22,0.10); }
+  .node-vars .node-name    { color: #bef264; }
+  .node-vars .node-badge   { background: rgba(132,204,22,0.15); color: #bef264; }
+
+  .node-class  { background: var(--cls-bg);  border-color: var(--cls-bd); min-width: 300px; }
+  .node-class:hover  { box-shadow: 0 0 20px var(--cls-glow); }
+  .node-class .node-header  { background: rgba(14,165,233,0.12); }
+  .node-class .node-name    { color: #7dd3fc; font-size: 15px; }
+  .node-class .node-badge   { background: rgba(14,165,233,0.2); color: #7dd3fc; }
+
+  .node-pub    { background: var(--pub-bg);  border-color: var(--pub-bd); }
+  .node-pub:hover   { box-shadow: 0 0 18px var(--pub-glow); }
+  .node-pub .node-header   { background: rgba(34,197,94,0.10); }
+  .node-pub .node-name     { color: #86efac; }
+  .node-pub .node-badge    { background: rgba(34,197,94,0.15); color: #86efac; }
+
+  .node-priv   { background: var(--priv-bg); border-color: var(--priv-bd); }
+  .node-priv:hover  { box-shadow: 0 0 18px var(--priv-glow); }
+  .node-priv .node-header  { background: rgba(245,158,11,0.10); }
+  .node-priv .node-name    { color: #fcd34d; }
+  .node-priv .node-badge   { background: rgba(245,158,11,0.15); color: #fcd34d; }
+
+  .node-reserva { background: var(--res-bg); border-color: var(--res-bd); }
+  .node-reserva:hover { box-shadow: 0 0 18px var(--res-glow); }
+  .node-reserva .node-header { background: rgba(56,189,248,0.10); }
+  .node-reserva .node-name   { color: #7dd3fc; }
+  .node-reserva .node-badge  { background: rgba(56,189,248,0.15); color: #7dd3fc; }
+
+  /* ── SECTION LABELS ─────────────────────────── */
+  .section-label {
+    position: absolute;
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 11px; font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: #1f2937;
+    z-index: 2;
+  }
+
+  /* ── TOOLTIP ─────────────────────────────────── */
+  #tooltip {
+    position: fixed;
+    background: var(--tooltip-bg);
+    border: 1px solid var(--tooltip-bd);
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-size: 11px;
+    max-width: 340px;
+    z-index: 9999;
+    pointer-events: none;
+    display: none;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+    line-height: 1.6;
+  }
+  #tooltip .tt-title { color: #e2e8f0; font-weight: 700; font-size: 12px; margin-bottom: 8px; }
+  #tooltip .tt-section { color: #475569; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; margin-top: 7px; margin-bottom: 2px; }
+  #tooltip .tt-param { color: #93c5fd; }
+  #tooltip .tt-type  { color: #a78bfa; }
+  #tooltip .tt-from  { color: #6b7280; font-style: italic; }
+  #tooltip .tt-ret   { color: #a78bfa; }
+  #tooltip .tt-call  { color: #64748b; }
+  #tooltip code { background: rgba(255,255,255,0.06); padding: 1px 4px; border-radius: 3px; }
+
+  /* ── HIGHLIGHTED ARROWS ─────────────────────── */
+  .arrow-path { transition: opacity 0.2s, stroke-width 0.2s; }
+  .arrow-path.dimmed { opacity: 0.08; }
+  .arrow-path.active { stroke-width: 2.5 !important; opacity: 1 !important; filter: drop-shadow(0 0 3px currentColor); }
+
+  /* ── ACTIVE NODE ─────────────────────────────── */
+  .node.dimmed { opacity: 0.25; }
+  .node.active { z-index: 60 !important; }
 </style>
 </head>
 <body>
 
-<h1>Mapa completo del código — Cubo Negro Tracking</h1>
-<p class="page-sub">
-  Haz clic en cualquier elemento del panel izquierdo para ver sus detalles.<br>
-  Las etiquetas <span class="param-legend-tag">→ / ← flujo de parámetro</span> muestran cómo cada variable entra o sale como parámetro entre funciones.
-</p>
-
-<div class="root">
-  <div class="sidebar">
-    <div class="sidebar-section">
-      <div class="sidebar-label">Clases</div>
-      <div class="nav-item active" onclick="show('reserva')" id="nav-reserva"><span class="dot dot-purple"></span>ReservaBordes</div>
-      <div class="nav-item" onclick="show('tracker')" id="nav-tracker"><span class="dot dot-purple"></span>BlobTracker</div>
-    </div>
-    <div class="sidebar-section">
-      <div class="sidebar-label">Inicio / Setup</div>
-      <div class="nav-item" onclick="show('main')" id="nav-main"><span class="dot dot-teal"></span>cannyEdge()</div>
-      <div class="nav-item" onclick="show('calibrar')" id="nav-calibrar"><span class="dot dot-teal"></span>calibrar_roi()</div>
-      <div class="nav-item" onclick="show('clasificar')" id="nav-clasificar"><span class="dot dot-teal"></span>clasificar_bordes()</div>
-    </div>
-    <div class="sidebar-section">
-      <div class="sidebar-label">Helpers en runtime</div>
-      <div class="nav-item" onclick="show('detectar')" id="nav-detectar"><span class="dot dot-coral"></span>detectar_borde()</div>
-      <div class="nav-item" onclick="show('punto')" id="nav-punto"><span class="dot dot-coral"></span>punto_cerca_segmento()</div>
-      <div class="nav-item" onclick="show('suavizar')" id="nav-suavizar"><span class="dot dot-coral"></span>suavizar_mask()</div>
-    </div>
-    <div class="sidebar-section">
-      <div class="sidebar-label">Métodos del tracker</div>
-      <div class="nav-item" onclick="show('predecir')" id="nav-predecir"><span class="dot dot-amber"></span>_predecir()</div>
-      <div class="nav-item" onclick="show('calcvel')" id="nav-calcvel"><span class="dot dot-amber"></span>_calcular_velocidad()</div>
-      <div class="nav-item" onclick="show('angulo')" id="nav-angulo"><span class="dot dot-amber"></span>_angulo() / _diff_angulo()</div>
-      <div class="nav-item" onclick="show('agregar')" id="nav-agregar"><span class="dot dot-amber"></span>agregar_track()</div>
-      <div class="nav-item" onclick="show('proximidad')" id="nav-proximidad"><span class="dot dot-amber"></span>_actualizar_proximidad()</div>
-      <div class="nav-item" onclick="show('posicion')" id="nav-posicion"><span class="dot dot-amber"></span>_posicion_esperada()</div>
-      <div class="nav-item" onclick="show('actualizar')" id="nav-actualizar"><span class="dot dot-amber"></span>actualizar() ★</div>
-    </div>
-    <div class="sidebar-section">
-      <div class="sidebar-label">Utilidades</div>
-      <div class="nav-item" onclick="show('callbacks')" id="nav-callbacks"><span class="dot dot-gray"></span>callback() / mouse_callback()</div>
-    </div>
+<div id="topbar">
+  <div>
+    <div class="title">📦 ARQUITECTURA DEL SISTEMA — test2.py</div>
+    <div class="subtitle">OpenCV Blob Tracker · Python · Flujo completo de datos</div>
   </div>
-  <div class="detail" id="detail-panel">
-    <p style="font-size:13px;color:var(--text-tertiary);font-style:italic">← Haz clic en un elemento del panel para ver sus detalles</p>
+  <div id="legend">
+    <div class="leg-item"><div class="leg-dot" style="background:#ef444422;border-color:#ef4444"></div> Entry Point</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#8b5cf622;border-color:#8b5cf6"></div> Func. Global</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#84cc1622;border-color:#84cc16"></div> Variables</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#0ea5e922;border-color:#0ea5e9"></div> Clase</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#22c55e22;border-color:#22c55e"></div> Método Público</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#f59e0b22;border-color:#f59e0b"></div> Método Privado</div>
+    <div class="leg-line" style="background:linear-gradient(90deg,#475569,#475569);border-top:1px dashed #475569;margin:0 2px"></div><span style="font-size:10px;color:#475569">llamada</span>
+    <div class="leg-line" style="background:#fbbf24;margin:0 2px"></div><span style="font-size:10px;color:#fbbf24">dato/parámetro</span>
+    <div class="leg-line" style="background:#a78bfa;margin:0 2px"></div><span style="font-size:10px;color:#a78bfa">retorno</span>
+  </div>
+  <div id="hint">← Scroll para mover · Hover/Click para detalles →</div>
+</div>
+
+<div id="canvas-wrapper">
+<div id="canvas">
+<svg id="svg-overlay"></svg>
+
+<!-- ════════════════════════════════════════════════
+     GLOBAL VARIABLES
+════════════════════════════════════════════════ -->
+<div class="section-label" style="left:30px;top:18px">● Variables Globales</div>
+
+<div class="node node-vars" id="n-gvars" style="left:30px;top:40px;width:280px"
+  data-tooltip='{"title":"Variables Globales","sections":[{"label":"mostrar_filtros","content":"<span class=\"tt-type\">bool</span> — alterna entre vista filtrada/original<br><span class=\"tt-from\">Modificada por: cannyEdge (tecla F)</span>"},{"label":"puntos_roi","content":"<span class=\"tt-type\">list of (x,y) tuples</span> — puntos del polígono ROI<br><span class=\"tt-from\">Modificada por: mouse_callback, calibrar_roi<br>Leída por: calibrar_roi (retornada como np.array)"}]}'>
+  <div class="node-header">
+    <span class="node-icon">🌐</span>
+    <span class="node-name">GLOBAL VARIABLES</span>
+    <span class="node-badge">VARS</span>
+  </div>
+  <div class="node-body">
+    <div class="param-line"><span class="param-name">mostrar_filtros</span><span class="param-type">: bool</span><span class="param-origin">= True</span></div>
+    <div class="param-line"><span class="param-name">puntos_roi</span><span class="param-type">: list[(x,y)]</span><span class="param-origin">= []</span></div>
   </div>
 </div>
 
-<div class="legend">
-  <div class="leg-item"><span class="dot dot-purple"></span>Clase</div>
-  <div class="leg-item"><span class="dot dot-teal"></span>Función de setup</div>
-  <div class="leg-item"><span class="dot dot-coral"></span>Helper de runtime</div>
-  <div class="leg-item"><span class="dot dot-amber"></span>Método interno del tracker</div>
-  <div class="leg-item"><span class="dot dot-gray"></span>Utilidad</div>
+<!-- ════════════════════════════════════════════════
+     GLOBAL FUNCTIONS
+════════════════════════════════════════════════ -->
+<div class="section-label" style="left:30px;top:155px">● Funciones Globales</div>
+
+<div class="node node-global" id="n-callback" style="left:30px;top:178px;width:280px"
+  data-tooltip='{"title":"callback(val)","sections":[{"label":"PARÁMETROS","content":"<span class=\"tt-param\">val</span> <span class=\"tt-type\">: int</span> — valor del trackbar de OpenCV<br><span class=\"tt-from\">Origen: cv.createTrackbar (auto-inyectado por OpenCV)</span>"},{"label":"RETORNA","content":"<span class=\"tt-ret\">None</span>"},{"label":"LLAMADA POR","content":"<span class=\"tt-call\">cv.createTrackbar × 5 (en cannyEdge):\nBlur, Min_thresh, Max_thresh, Close, Open</span>"},{"label":"PROPÓSITO","content":"Callback vacío requerido por OpenCV para los trackbars. Los valores se leen manualmente con getTrackbarPos()."}]}'>
+  <div class="node-header">
+    <span class="node-icon">⚡</span>
+    <span class="node-name">callback(val)</span>
+    <span class="node-badge">FN</span>
+  </div>
+  <div class="node-body">
+    <div class="param-line"><span class="param-name">val</span><span class="param-type">: int</span><span class="param-origin">← OpenCV (auto)</span></div>
+    <div class="return-line">↩ None &nbsp;<span style="color:#4b5563;font-size:9px">(vacía, requerida por API)</span></div>
+  </div>
 </div>
+
+<div class="node node-global" id="n-mouse_callback" style="left:30px;top:290px;width:280px"
+  data-tooltip='{"title":"mouse_callback(event, x, y, flags, param)","sections":[{"label":"PARÁMETROS","content":"<span class=\"tt-param\">event</span> <span class=\"tt-type\">: int</span> — tipo de evento OpenCV (EVENT_LBUTTONDOWN...)<br><span class=\"tt-param\">x</span> <span class=\"tt-type\">: int</span> — posición X del cursor en píxeles<br><span class=\"tt-param\">y</span> <span class=\"tt-type\">: int</span> — posición Y del cursor en píxeles<br><span class=\"tt-param\">flags</span> <span class=\"tt-type\">: int</span> — flags adicionales de OpenCV (no usado)<br><span class=\"tt-param\">param</span> <span class=\"tt-type\">: any</span> — datos extra (no usado)<br><span class=\"tt-from\">Origen: cv.setMouseCallback (inyectado por OpenCV)</span>"},{"label":"MODIFICA (GLOBAL)","content":"<code>puntos_roi</code> — añade (x,y) al hacer clic izquierdo"},{"label":"RETORNA","content":"<span class=\"tt-ret\">None</span>"},{"label":"LLAMADA POR","content":"<span class=\"tt-call\">cv.setMouseCallback() dentro de calibrar_roi()</span>"}]}'>
+  <div class="node-header">
+    <span class="node-icon">🖱️</span>
+    <span class="node-name">mouse_callback(...)</span>
+    <span class="node-badge">FN</span>
+  </div>
+  <div class="node-body">
+    <div class="param-line"><span class="param-name">event</span><span class="param-type">: int</span><span class="param-origin">← OpenCV</span></div>
+    <div class="param-line"><span class="param-name">x, y</span><span class="param-type">: int</span><span class="param-origin">← cursor píxeles</span></div>
+    <div class="param-line"><span class="param-name">flags, param</span><span class="param-type">: …</span><span class="param-origin">← OpenCV (no usados)</span></div>
+    <div class="return-line">↩ None · escribe → <span class="param-name">puntos_roi</span></div>
+  </div>
+</div>
+
+<div class="node node-global" id="n-calibrar_roi" style="left:30px;top:430px;width:280px"
+  data-tooltip='{"title":"calibrar_roi(cap)","sections":[{"label":"PARÁMETROS","content":"<span class=\"tt-param\">cap</span> <span class=\"tt-type\">: cv.VideoCapture</span> — captura de video<br><span class=\"tt-from\">Origen: cannyEdge() → cv.VideoCapture(VIDEO_PATH)</span>"},{"label":"RETORNA","content":"<span class=\"tt-ret\">np.array(dtype=int32)</span> — polígono ROI como array de puntos<br><span class=\"tt-ret\">None</span> — si el primer frame falla"},{"label":"LEE (GLOBAL)","content":"<code>puntos_roi</code> — lista de puntos del usuario"},{"label":"MODIFICA (GLOBAL)","content":"<code>puntos_roi</code> — reinicia con R, deshace con Z"},{"label":"LLAMA A","content":"<span class=\"tt-call\">cap.read(), cap.set(), cv.namedWindow(), cv.setMouseCallback(mouse_callback), cv.circle(), cv.putText(), cv.line(), cv.fillPoly(), cv.addWeighted(), cv.imshow(), cv.waitKey(), cv.destroyWindow(), np.array()</span>"},{"label":"LLAMADA POR","content":"<span class=\"tt-call\">cannyEdge()</span>"},{"label":"DESTINO DEL RETORNO","content":"<span class=\"tt-call\">roi_poly → cannyEdge → clasificar_bordes(roi_poly)</span><br><span class=\"tt-call\">roi_poly → cannyEdge → cv.fillPoly, cv.polylines</span>"}]}'>
+  <div class="node-header">
+    <span class="node-icon">🎯</span>
+    <span class="node-name">calibrar_roi(cap)</span>
+    <span class="node-badge">FN</span>
+  </div>
+  <div class="node-body">
+    <div class="param-line"><span class="param-name">cap</span><span class="param-type">: VideoCapture</span><span class="param-origin">← cannyEdge</span></div>
+    <div class="param-line" style="margin-top:4px;color:#4b5563;font-size:9px">lee/escribe: puntos_roi (global)</div>
+    <div class="param-line">llama: <span class="param-name" style="color:#6b7280">mouse_callback</span></div>
+    <div class="return-line">↩ <span class="param-type">np.array[int32]</span> <span style="color:#4b5563">roi_poly</span> | None</div>
+  </div>
+</div>
+
+<div class="node node-global" id="n-clasificar_bordes" style="left:30px;top:590px;width:280px"
+  data-tooltip='{"title":"clasificar_bordes(roi_poly)","sections":[{"label":"PARÁMETROS","content":"<span class=\"tt-param\">roi_poly</span> <span class=\"tt-type\">: np.array[int32]</span> — polígono ROI<br><span class=\"tt-from\">Origen: calibrar_roi() → cannyEdge()</span>"},{"label":"LÓGICA","content":"Convierte el polígono en segmentos, calcula los midpoints y clasifica cada segmento según si su midpoint está más arriba/abajo/izq/der."},{"label":"RETORNA","content":"<span class=\"tt-ret\">dict</span> con claves: superior, inferior, izquierdo, derecho<br>Cada valor es un dict: {p1, p2, mx, my}"},{"label":"DESTINO DEL RETORNO","content":"<span class=\"tt-call\">bordes → cannyEdge → detectar_borde(), BlobTracker.actualizar()</span>"},{"label":"LLAMADA POR","content":"<span class=\"tt-call\">cannyEdge()</span>"}]}'>
+  <div class="node-header">
+    <span class="node-icon">📐</span>
+    <span class="node-name">clasificar_bordes(roi_poly)</span>
+    <span class="node-badge">FN</span>
+  </div>
+  <div class="node-body">
+    <div class="param-line"><span class="param-name">roi_poly</span><span class="param-type">: np.array</span><span class="param-origin">← calibrar_roi</span></div>
+    <div class="return-line">↩ <span class="param-type">dict</span> {superior, inferior, izq, der}</div>
+    <div class="calls-line">→ cannyEdge (bordes) → detectar_borde, actualizar</div>
+  </div>
+</div>
+
+<div class="node node-global" id="n-punto_cerca" style="left:30px;top:730px;width:280px"
+  data-tooltip='{"title":"punto_cerca_segmento(px, py, p1, p2, umbral=50)","sections":[{"label":"PARÁMETROS","content":"<span class=\"tt-param\">px</span> <span class=\"tt-type\">: int</span> — coordenada X del punto<br><span class=\"tt-from\">Origen: detectar_borde (cx)</span><br><span class=\"tt-param\">py</span> <span class=\"tt-type\">: int</span> — coordenada Y del punto<br><span class=\"tt-from\">Origen: detectar_borde (cy)</span><br><span class=\"tt-param\">p1</span> <span class=\"tt-type\">: tuple(x,y)</span> — inicio del segmento<br><span class=\"tt-from\">Origen: bordes[nombre][p1] → desde clasificar_bordes</span><br><span class=\"tt-param\">p2</span> <span class=\"tt-type\">: tuple(x,y)</span> — fin del segmento<br><span class=\"tt-from\">Origen: bordes[nombre][p2] → desde clasificar_bordes</span><br><span class=\"tt-param\">umbral</span> <span class=\"tt-type\">: int</span> — distancia máxima en píxeles (def. 50)"},{"label":"RETORNA","content":"<span class=\"tt-ret\">bool</span> — True si distancia punto-segmento ≤ umbral"},{"label":"LLAMADA POR","content":"<span class=\"tt-call\">detectar_borde()</span>"}]}'>
+  <div class="node-header">
+    <span class="node-icon">📏</span>
+    <span class="node-name">punto_cerca_segmento(...)</span>
+    <span class="node-badge">FN</span>
+  </div>
+  <div class="node-body">
+    <div class="param-line"><span class="param-name">px, py</span><span class="param-type">: int</span><span class="param-origin">← detectar_borde</span></div>
+    <div class="param-line"><span class="param-name">p1, p2</span><span class="param-type">: tuple</span><span class="param-origin">← clasificar_bordes</span></div>
+    <div class="param-line"><span class="param-name">umbral</span><span class="param-type">: int</span><span class="param-origin">= 50</span></div>
+    <div class="return-line">↩ <span class="param-type">bool</span> (dist ≤ umbral)</div>
+  </div>
+</div>
+
+<div class="node node-global" id="n-detectar_borde" style="left:30px;top:890px;width:280px"
+  data-tooltip='{"title":"detectar_borde(cx, cy, bordes, umbral=50)","sections":[{"label":"PARÁMETROS","content":"<span class=\"tt-param\">cx</span> <span class=\"tt-type\">: int</span> — X del centroide del blob<br><span class=\"tt-from\">Origen: BlobTracker.actualizar (última posición del track)</span><br><span class=\"tt-param\">cy</span> <span class=\"tt-type\">: int</span> — Y del centroide del blob<br><span class=\"tt-from\">Origen: BlobTracker.actualizar</span><br><span class=\"tt-param\">bordes</span> <span class=\"tt-type\">: dict</span> — dict de segmentos<br><span class=\"tt-from\">Origen: clasificar_bordes() → cannyEdge → actualizar</span><br><span class=\"tt-param\">umbral</span> <span class=\"tt-type\">: int</span> — de UMBRAL_BORDE (config)"},{"label":"LLAMA A","content":"<span class=\"tt-call\">punto_cerca_segmento()</span> para cada borde"},{"label":"RETORNA","content":"<span class=\"tt-ret\">str</span> — nombre del borde ('superior'|'inferior'|'izquierdo'|'derecho')<br><span class=\"tt-ret\">None</span> — si ningún borde está cerca"},{"label":"DESTINO DEL RETORNO","content":"<span class=\"tt-call\">→ actualizar → reserva.registrar_salida(borde) o registrar_entrada(borde)</span>"},{"label":"LLAMADA POR","content":"<span class=\"tt-call\">BlobTracker.actualizar()</span>"}]}'>
+  <div class="node-header">
+    <span class="node-icon">🔍</span>
+    <span class="node-name">detectar_borde(cx, cy, bordes)</span>
+    <span class="node-badge">FN</span>
+  </div>
+  <div class="node-body">
+    <div class="param-line"><span class="param-name">cx, cy</span><span class="param-type">: int</span><span class="param-origin">← actualizar</span></div>
+    <div class="param-line"><span class="param-name">bordes</span><span class="param-type">: dict</span><span class="param-origin">← clasificar_bordes</span></div>
+    <div class="param-line"><span class="param-name">umbral</span><span class="param-type">: int</span><span class="param-origin">← UMBRAL_BORDE (config)</span></div>
+    <div class="param-line">llama: <span class="param-name" style="color:#6b7280">punto_cerca_segmento</span></div>
+    <div class="return-line">↩ <span class="param-type">str</span> (nombre borde) | None</div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════
+     ENTRY POINT — cannyEdge
+════════════════════════════════════════════════ -->
+<div class="section-label" style="left:370px;top:18px">● Entry Point</div>
+
+<div class="node node-entry" id="n-main" style="left:370px;top:40px;width:95px;min-width:0"
+  data-tooltip='{"title":"__main__","sections":[{"label":"DISPARO","content":"Punto de entrada del script.<br><code>if __name__ == \"__main__\":</code><br>Llama directamente a <code>cannyEdge()</code>"}]}'>
+  <div class="node-header" style="padding:6px 10px">
+    <span class="node-icon">▶</span>
+    <span class="node-name" style="font-size:11px">__main__</span>
+  </div>
+</div>
+
+<div class="node node-entry" id="n-cannyedge" style="left:370px;top:110px;width:500px"
+  data-tooltip='{"title":"cannyEdge() — FUNCIÓN PRINCIPAL","sections":[{"label":"PARÁMETROS","content":"Ninguno — es el punto de entrada del sistema"},{"label":"FLUJO DE EJECUCIÓN","content":"1. cv.VideoCapture(VIDEO_PATH) → cap<br>2. calibrar_roi(cap) → roi_poly<br>3. clasificar_bordes(roi_poly) → bordes<br>4. ReservaBordes(MAX_IDS) → reserva<br>5. cv.createTrackbar × 5 (→ callback)<br>6. BlobTracker(...) → tracker<br>7. LOOP: leer frame → preprocesar → detectar contornos → tracker.actualizar() → dibujar"},{"label":"VARIABLES LOCALES CLAVE","content":"cap, fps, delay, roi_poly, bordes, reserva, tracker, colors, historial_areas, blur_k, min_val, max_val, close_k, open_k, gray, blur, mask, roi_mask, contours, centroides, bboxes, resultado, display"},{"label":"LLAMA A","content":"calibrar_roi · clasificar_bordes · ReservaBordes() · BlobTracker() · tracker.actualizar() · tracker.reset() · reserva.reset() · cv.VideoCapture · cv.cvtColor · cv.GaussianBlur · cv.inRange · cv.morphologyEx · cv.fillPoly · cv.bitwise_and · cv.findContours · cv.polylines · cv.rectangle · cv.putText · cv.imshow · cv.waitKey"},{"label":"RETORNA","content":"<span class=\"tt-ret\">None</span>"}]}'>
+  <div class="node-header">
+    <span class="node-icon">🚀</span>
+    <span class="node-name">cannyEdge() — MAIN</span>
+    <span class="node-badge">ENTRY</span>
+  </div>
+  <div class="node-body">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 16px">
+      <div>
+        <div class="param-line" style="color:#ef4444;font-size:9px;font-weight:700;margin-bottom:3px">INICIALIZACIÓN</div>
+        <div class="param-line"><span style="color:#6b7280">1.</span> <span class="param-name">cap</span><span class="param-type">←VideoCapture</span></div>
+        <div class="param-line"><span style="color:#6b7280">2.</span> <span class="param-name">roi_poly</span><span class="param-type">←calibrar_roi</span></div>
+        <div class="param-line"><span style="color:#6b7280">3.</span> <span class="param-name">bordes</span><span class="param-type">←clasificar_bordes</span></div>
+        <div class="param-line"><span style="color:#6b7280">4.</span> <span class="param-name">reserva</span><span class="param-type">←ReservaBordes</span></div>
+        <div class="param-line"><span style="color:#6b7280">5.</span> trackbars × 5<span class="param-type">→callback</span></div>
+        <div class="param-line"><span style="color:#6b7280">6.</span> <span class="param-name">tracker</span><span class="param-type">←BlobTracker</span></div>
+      </div>
+      <div>
+        <div class="param-line" style="color:#ef4444;font-size:9px;font-weight:700;margin-bottom:3px">LOOP POR FRAME</div>
+        <div class="param-line"><span style="color:#6b7280">→</span> <span class="param-name">frame</span><span class="param-type">←cap.read</span></div>
+        <div class="param-line"><span style="color:#6b7280">→</span> <span class="param-name">blur_k,min,max</span><span class="param-type">←trackbar</span></div>
+        <div class="param-line"><span style="color:#6b7280">→</span> <span class="param-name">gray,blur,mask</span><span class="param-type">←cv.*</span></div>
+        <div class="param-line"><span style="color:#6b7280">→</span> <span class="param-name">contours</span><span class="param-type">←findContours</span></div>
+        <div class="param-line"><span style="color:#6b7280">→</span> <span class="param-name">centroides,bboxes</span></div>
+        <div class="param-line"><span style="color:#6b7280">→</span> <span class="param-name">resultado</span><span class="param-type">←actualizar</span></div>
+      </div>
+    </div>
+    <div class="calls-line" style="margin-top:8px;border-top:1px solid rgba(255,255,255,0.06);padding-top:6px">
+      pasa a tracker.actualizar: (centroides, reserva, bordes, bboxes, UMBRAL_BORDE)
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════
+     CLASS: ReservaBordes
+════════════════════════════════════════════════ -->
+<div class="section-label" style="left:370px;top:430px">● Clase: ReservaBordes</div>
+
+<div class="node node-class" id="n-cls-reserva" style="left:370px;top:455px;width:460px"
+  data-tooltip='{"title":"class ReservaBordes","sections":[{"label":"PROPÓSITO","content":"Sistema FIFO de reasignación de IDs por bordes del ROI. Garantiza que un jugador que sale y vuelve a entrar por el mismo lado recupera su ID original."},{"label":"ATRIBUTOS INTERNOS","content":"<code>max_ids: int</code> — máximo de IDs simultáneos<br><code>reservas: dict[str, deque]</code> — cola por borde<br><code>ids_en_reserva: set</code> — IDs esperando re-entrada<br><code>ids_activos: set</code> — IDs actualmente en campo<br><code>total_ids: int</code> — contador total asignado"},{"label":"INSTANCIADA EN","content":"<span class=\"tt-call\">cannyEdge() → reserva = ReservaBordes(max_ids=MAX_IDS)</span>"}]}'>
+  <div class="node-header">
+    <span class="node-icon">🏛️</span>
+    <span class="node-name">class ReservaBordes</span>
+    <span class="node-badge">CLASS</span>
+  </div>
+  <div class="node-body">
+    <div class="param-line" style="color:#6b7280;font-size:9px">Sistema FIFO de reserva de IDs por borde del ROI</div>
+    <div class="param-line" style="margin-top:4px"><span class="param-name">max_ids</span><span class="param-type">: int</span> · <span class="param-name">reservas</span><span class="param-type">: dict[deque]</span></div>
+    <div class="param-line"><span class="param-name">ids_en_reserva</span><span class="param-type">: set</span> · <span class="param-name">ids_activos</span><span class="param-type">: set</span> · <span class="param-name">total_ids</span><span class="param-type">: int</span></div>
+  </div>
+</div>
+
+<!-- ReservaBordes methods -->
+<div class="node node-pub" id="n-rb-init" style="left:370px;top:575px;width:220px"
+  data-tooltip='{"title":"ReservaBordes.__init__(max_ids=21)","sections":[{"label":"PARÁMETROS","content":"<span class=\"tt-param\">max_ids</span> <span class=\"tt-type\">: int</span> = 21<br><span class=\"tt-from\">Origen: MAX_IDS (config) pasado por cannyEdge</span>"},{"label":"INICIALIZA","content":"reservas {superior, inferior, izquierdo, derecho}: deque<br>ids_en_reserva: set()<br>ids_activos: set()<br>total_ids: 0"}]}'>
+  <div class="node-header"><span class="node-icon">🔧</span><span class="node-name">__init__(max_ids=21)</span><span class="node-badge">PUB</span></div>
+  <div class="node-body">
+    <div class="param-line"><span class="param-name">max_ids</span><span class="param-type">: int</span><span class="param-origin">← MAX_IDS (config)</span></div>
+  </div>
+</div>
+
+<div class="node node-pub" id="n-rb-reset" style="left:600px;top:575px;width:220px"
+  data-tooltip='{"title":"ReservaBordes.reset()","sections":[{"label":"PARÁMETROS","content":"Ninguno (solo self)"},{"label":"ACCIÓN","content":"Limpia todas las deques de reservas, ids_en_reserva, ids_activos y reinicia total_ids = 0"},{"label":"LLAMADA POR","content":"<span class=\"tt-call\">cannyEdge() — cuando el video termina y se reinicia el loop</span>"}]}'>
+  <div class="node-header"><span class="node-icon">🔄</span><span class="node-name">reset()</span><span class="node-badge">PUB</span></div>
+  <div class="node-body">
+    <div class="param-line" style="color:#4b5563">limpia todas las colas y sets</div>
+    <div class="return-line">↩ None</div>
+  </div>
+</div>
+
+<div class="node node-pub" id="n-rb-salida" style="left:370px;top:680px;width:220px"
+  data-tooltip='{"title":"ReservaBordes.registrar_salida(track_id, borde)","sections":[{"label":"PARÁMETROS","content":"<span class=\"tt-param\">track_id</span> <span class=\"tt-type\">: int</span> — ID del track que sale<br><span class=\"tt-from\">Origen: BlobTracker.actualizar (tid)</span><br><span class=\"tt-param\">borde</span> <span class=\"tt-type\">: str</span> — nombre del borde por el que sale<br><span class=\"tt-from\">Origen: detectar_borde() → actualizar</span>"},{"label":"ACCIÓN","content":"Si track_id no está ya en reserva:<br>• Añade a reservas[borde] (deque FIFO)<br>• Añade a ids_en_reserva<br>• Descarta de ids_activos"},{"label":"LLAMADA POR","content":"<span class=\"tt-call\">BlobTracker.actualizar() — cuando un track se vuelve invisible cerca del borde</span>"}]}'>
+  <div class="node-header"><span class="node-icon">🚪</span><span class="node-name">registrar_salida(...)</span><span class="node-badge">PUB</span></div>
+  <div class="node-body">
+    <div class="param-line"><span class="param-name">track_id</span><span class="param-type">: int</span><span class="param-origin">← actualizar</span></div>
+    <div class="param-line"><span class="param-name">borde</span><span class="param-type">: str</span><span class="param-origin">← detectar_borde</span></div>
+    <div class="return-line">↩ None · enqueue en reservas[borde]</div>
+  </div>
+</div>
+
+<div class="node node-pub" id="n-rb-entrada" style="left:600px;top:680px;width:220px"
+  data-tooltip='{"title":"ReservaBordes.registrar_entrada(borde)","sections":[{"label":"PARÁMETROS","content":"<span class=\"tt-param\">borde</span> <span class=\"tt-type\">: str</span> — nombre del borde de entrada<br><span class=\"tt-from\">Origen: detectar_borde() → actualizar</span>"},{"label":"LÓGICA","content":"1. Si hay ID en reservas[borde] → dequeue y retornar ese ID (reciclado)<br>2. Si total_en_uso < max_ids → asignar nuevo ID (total_ids + 1)<br>3. Si límite alcanzado → retornar None"},{"label":"RETORNA","content":"<span class=\"tt-ret\">int</span> — track_id (reciclado o nuevo)<br><span class=\"tt-ret\">None</span> — si máximo alcanzado"},{"label":"LLAMADA POR","content":"<span class=\"tt-call\">BlobTracker.actualizar()</span>"}]}'>
+  <div class="node-header"><span class="node-icon">🎫</span><span class="node-name">registrar_entrada(borde)</span><span class="node-badge">PUB</span></div>
+  <div class="node-body">
+    <div class="param-line"><span class="param-name">borde</span><span class="param-type">: str</span><span class="param-origin">← detectar_borde</span></div>
+    <div class="return-line">↩ <span class="param-type">int</span> track_id | None</div>
+  </div>
+</div>
+
+<div class="node node-pub" id="n-rb-confirmar" style="left:370px;top:800px;width:460px"
+  data-tooltip='{"title":"ReservaBordes.confirmar_activo(track_id)","sections":[{"label":"PARÁMETROS","content":"<span class=\"tt-param\">track_id</span> <span class=\"tt-type\">: int</span> — ID a confirmar como activo<br><span class=\"tt-from\">Origen: BlobTracker.actualizar() — nuevo track o separación</span>"},{"label":"ACCIÓN","content":"Mueve el ID de ids_en_reserva a ids_activos"},{"label":"LLAMADA POR","content":"<span class=\"tt-call\">BlobTracker.actualizar() — después de agregar_track() con ID recuperado</span>"}]}'>
+  <div class="node-header"><span class="node-icon">✅</span><span class="node-name">confirmar_activo(track_id)</span><span class="node-badge">PUB</span></div>
+  <div class="node-body">
+    <div class="param-line"><span class="param-name">track_id</span><span class="param-type">: int</span><span class="param-origin">← actualizar (nuevo o recuperado)</span></div>
+    <div class="return-line">↩ None · mueve de reserva → activos</div>
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════════════
+     CLASS: BlobTracker
+════════════════════════════════════════════════ -->
+<div class="section-label" style="left:920px;top:18px">● Clase: BlobTracker</div>
+
+<div class="node node-class" id="n-cls-tracker" style="left:920px;top:40px;width:1420px"
+  data-tooltip='{"title":"class BlobTracker","sections":[{"label":"PROPÓSITO","content":"Tracker multi-objeto basado en predicción de velocidad, ángulo de movimiento, área y dirección. Gestiona fusión/separación de blobs con sistema de cápsulas congeladas."},{"label":"ATRIBUTOS INTERNOS","content":"tracks: dict[id→dict] — estado de cada track (cx,cy,vx,vy,historial,visible,edad_invisible,area_hist...)<br>next_id: int — próximo ID a asignar<br>max_edad: int — frames invisibles antes de eliminar<br>vel_history: int — ventana de historial para velocidad<br>max_dist: int — distancia máxima de asociación<br>peso_dist/peso_angulo: float — pesos de scoring<br>pares_fusionados: set — pares en contacto confirmado<br>contactos_activos: dict — info de fusiones en curso"},{"label":"INSTANCIADA EN","content":"<span class=\"tt-call\">cannyEdge() → tracker = BlobTracker(...params de config...)</span>"}]}'>
+  <div class="node-header">
+    <span class="node-icon">🧠</span>
+    <span class="node-name">class BlobTracker</span>
+    <span class="node-badge">CLASS</span>
+  </div>
+  <div class="node-body">
+    <div style="display:flex;gap:24px;flex-wrap:wrap">
+      <div class="param-line"><span class="param-name">tracks</span><span class="param-type">: dict</span> · <span class="param-name">next_id</span><span class="param-type">: int</span> · <span class="param-name">max_edad</span><span class="param-type">: int</span></div>
+      <div class="param-line"><span class="param-name">vel_history</span><span class="param-type">: int</span> · <span class="param-name">max_dist</span><span class="param-type">: int</span> · <span class="param-name">peso_dist/angulo</span><span class="param-type">: float</span></div>
+      <div class="param-line"><span class="param-name">pares_fusionados</span><span class="param-type">: set</span> · <span class="param-name">contactos_activos</span><span class="param-type">: dict</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- BlobTracker — Row 1: __init__, reset -->
+<div class="node node-pub" id="n-bt-init" style="left:920px;top:160px;width:310px"
+  data-tooltip='{"title":"BlobTracker.__init__(...)","sections":[{"label":"PARÁMETROS","content":"<span class=\"tt-param\">max_edad_invisible</span> <span class=\"tt-type\">: int</span> ← MAX_EDAD_INVISIBLE (config)<br><span class=\"tt-param\">vel_history</span> <span class=\"tt-type\">: int</span> ← VEL_HISTORY (config)<br><span class=\"tt-param\">max_dist</span> <span class=\"tt-type\">: int</span> ← MAX_DIST (config)<br><span class=\"tt-param\">peso_dist</span> <span class=\"tt-type\">: float</span> ← PESO_DIST (config)<br><span class=\"tt-param\">peso_angulo</span> <span class=\"tt-type\">: float</span> ← PESO_ANGULO (config)"},{"label":"INICIALIZA","content":"tracks: {}, next_id: 1, pares_fusionados: set(), contactos_activos: {}"},{"label":"LLAMADA POR","content":"<span class=\"tt-call\">cannyEdge()</span>"}]}'>
+  <div class="node-header"><span class="node-icon">🔧</span><span class="node-name">__init__(...params config)</span><span class="node-badge">PUB</span></div>
+  <div class="node-body">
+    <div class="param-line"><span class="param-name">max_edad_invisible</span><span class="param-origin">← MAX_EDAD_INVISIBLE</span></div>
+    <div class="param-line"><span class="param-name">vel_history, max_dist</span><span class="param-origin">← config</span></div>
+    <div class="param-line"><span class="param-name">peso_dist, peso_angulo</span><span class="param-origin">← config</span></div>
+  </div>
+</div>
+
+<div class="node node-pub" id="n-bt-reset" style="left:1240px;top:160px;width:240px"
+  data-tooltip='{"title":"BlobTracker.reset()","sections":[{"label":"ACCIÓN","content":"Reinicia: tracks={}, next_id=1, pares_fusionados=set(), contactos_activos={}"},{"label":"LLAMADA POR","content":"<span class=\"tt-call\">cannyEdge() — cuando el video termina y se reinicia el loop</span>"}]}'>
+  <div class="node-header"><span class="node-icon">🔄</span><span class="node-name">reset()</span><span class="node-badge">PUB</span></div>
+  <div class="node-body">
+    <div class="param-line" style="color:#4b5563">reinicia tracks, next_id, fusiones</div>
+    <div class="return-line">↩ None</div>
+  </div>
+</div>
+
+<div class="node node-pub" id="n-bt-agregar" style="left:1490px;top:160px;width:290px"
+  data-tooltip='{"title":"BlobTracker.agregar_track(track_id, cx, cy)","sections":[{"label":"PARÁMETROS","content":"<span class=\"tt-param\">track_id</span> <span class=\"tt-type\">: int</span> — ID del nuevo track<br><span class=\"tt-from\">Origen: reserva.registrar_entrada() o id_recuperado</span><br><span class=\"tt-param\">cx</span> <span class=\"tt-type\">: int</span> — posición X inicial<br><span class=\"tt-from\">Origen: centroide detectado</span><br><span class=\"tt-param\">cy</span> <span class=\"tt-type\">: int</span> — posición Y inicial"},{"label":"CREA TRACK","content":"tracks[id] = {cx,cy,cx_pred,cy_pred,vx:0,vy:0,ultima_dir_x:0,ultima_dir_y:0,historial:[(cx,cy)],visible:True,edad_invisible:0,area_hist:deque(maxlen=20)}"},{"label":"LLAMADA POR","content":"<span class=\"tt-call\">BlobTracker.actualizar()</span>"}]}'>
+  <div class="node-header"><span class="node-icon">➕</span><span class="node-name">agregar_track(id, cx, cy)</span><span class="node-badge">PUB</span></div>
+  <div class="node-body">
+    <div class="param-line"><span class="param-name">track_id</span><span class="param-type">: int</span><span class="param-origin">← reserva / separación</span></div>
+    <div class="param-line"><span class="param-name">cx, cy</span><span class="param-type">: int</span><span class="param-origin">← centroide detectado</span></div>
+    <div class="return-line">↩ None · crea tracks[id]</div>
+  </div>
+</div>
+
+<!-- Row 2: private helpers -->
+<div class="node node-priv" id="n-bt-angulo" style="left:920px;top:310px;width:210px"
+  data-tooltip='{"title":"BlobTracker._angulo(vx, vy)","sections":[{"label":"PARÁMETROS","content":"<span class=\"tt-param\">vx</span> <span class=\"tt-type\">: float</span> — velocidad X del track<br><span class=\"tt-from\">Origen: tracks[id][\"vx\"]</span><br><span class=\"tt-param\">vy</span> <span class=\"tt-type\">: float</span> — velocidad Y del track"},{"label":"RETORNA","content":"<span class=\"tt-ret\">float</span> — ángulo en grados (via np.arctan2)"},{"label":"LLAMADA POR","content":"<span class=\"tt-call\">BlobTracker.actualizar() — en la matriz de scoring</span>"}]}'>
+  <div class="node-header"><span class="node-icon">📐</span><span class="node-name">_angulo(vx, vy)</span><span class="node-badge">PRIV</span></div>
+  <div class="node-body">
+    <div class="param-line"><span class="param-name">vx, vy</span><span class="param-type">: float</span><span class="param-origin">← tracks[id]</span></div>
+    <div class="return-line">↩ <span class="param-type">float</span> (grados)</div>
+  </div>
+</div>
+
+<div class="node node-priv" id="n-bt-diff_angulo" style="left:1140px;top:310px;width:220px"
+  data-tooltip='{"title":"BlobTracker._diff_angulo(a1, a2)","sections":[{"label":"PARÁMETROS","content":"<span class=\"tt-param\">a1</span> <span class=\"tt-type\">: float</span> — ángulo del track (de _angulo)<br><span class=\"tt-param\">a2</span> <span class=\"tt-type\">: float</span> — ángulo hacia la detección (de _angulo)"},{"label":"RETORNA","content":"<span class=\"tt-ret\">float</span> — diferencia angular mínima [0, 180°]"},{"label":"LLAMADA POR","content":"<span class=\"tt-call\">BlobTracker.actualizar() — cálculo de ang_score</span>"}]}'>
+  <div class="node-header"><span class="node-icon">∡</span><span class="node-name">_diff_angulo(a1, a2)</span><span class="node-badge">PRIV</span></div>
+  <div class="node-body">
+    <div class="param-line"><span class="param-name">a1, a2</span><span class="param-type">: float</span><span class="param-origin">← _angulo()</span></div>
+    <div class="return-line">↩ <span class="param-type">float</span> [0, 180]</div>
+  </div>
+</div>
+
+<div class="node node-priv" id="n-bt-predecir" style="left:1370px;top:310px;width:220px"
+  data-tooltip='{"title":"BlobTracker._predecir()","sections":[{"label":"PARÁMETROS","content":"Ninguno — itera sobre self.tracks"},{"label":"ACCIÓN","content":"Para cada track: cx_pred = cx + vx, cy_pred = cy + vy<br>Estas predicciones son usadas en actualizar() por _posicion_esperada()"},{"label":"LLAMADA POR","content":"<span class=\"tt-call\">BlobTracker.actualizar() — PRIMER paso antes de cualquier asignación</span>"}]}'>
+  <div class="node-header"><span class="node-icon">🔮</span><span class="node-name">_predecir()</span><span class="node-badge">PRIV</span></div>
+  <div class="node-body">
+    <div class="param-line" style="color:#4b5563">actualiza cx_pred, cy_pred ∀ tracks</div>
+    <div class="return-line">↩ None</div>
+  </div>
+</div>
+
+<div class="node node-priv" id="n-bt-calc_vel" style="left:1600px;top:310px;width:260px"
+  data-tooltip='{"title":"BlobTracker._calcular_velocidad(historial)","sections":[{"label":"PARÁMETROS","content":"<span class=\"tt-param\">historial</span> <span class=\"tt-type\">: list[(cx,cy)]</span> — historial de posiciones<br><span class=\"tt-from\">Origen: tracks[id][\"historial\"]</span>"},{"label":"LÓGICA","content":"Calcula vx,vy como media de desplazamientos consecutivos.<br>Clampea a ±MAX_VEL (config)."},{"label":"RETORNA","content":"<span class=\"tt-ret\">(vx, vy)</span> — tuple de floats clampeados"},{"label":"LLAMADA POR","content":"<span class=\"tt-call\">BlobTracker.actualizar() — después de actualizar historial de un track asignado o rescatado</span>"}]}'>
+  <div class="node-header"><span class="node-icon">⚡</span><span class="node-name">_calcular_velocidad(hist)</span><span class="node-badge">PRIV</span></div>
+  <div class="node-body">
+    <div class="param-line"><span class="param-name">historial</span><span class="param-type">: list[(cx,cy)]</span><span class="param-origin">← tracks[id]</span></div>
+    <div class="return-line">↩ <span class="param-type">(vx, vy)</span> floats ±MAX_VEL</div>
+  </div>
+</div>
+
+<!-- Row 3: capsule methods -->
+<div class="node node-priv" id="n-bt-congelar" style="left:920px;top:480px;width:310px"
+  data-tooltip='{"title":"BlobTracker._congelar_capsula(tid)","sections":[{"label":"PARÁMETROS","content":"<span class=\"tt-param\">tid</span> <span class=\"tt-type\">: int</span> — ID del track a congelar<br><span class=\"tt-from\">Origen: _detectar_contactos (tid_a o tid_b del par)</span>"},{"label":"PROPÓSITO","content":"Congela un snapshot del estado del track en el momento del contacto físico, antes de que los blobs se mezclen visualmente."},{"label":"RETORNA","content":"<span class=\"tt-ret\">dict</span> con: id, cx, cy, vx, vy, speed, dir_x, dir_y, px_pred, py_pred, frames_dentro:0"},{"label":"LLAMADA POR","content":"<span class=\"tt-call\">BlobTracker._detectar_contactos() — en contacto nuevo</span>"}]}'>
+  <div class="node-header"><span class="node-icon">🧊</span><span class="node-name">_congelar_capsula(tid)</span><span class="node-badge">PRIV</span></div>
+  <div class="node-body">
+    <div class="param-line"><span class="param-name">tid</span><span class="param-type">: int</span><span class="param-origin">← _detectar_contactos</span></div>
+    <div class="return-line">↩ <span class="param-type">dict</span> {id,cx,cy,vx,vy,speed,px_pred…}</div>
+  </div>
+</div>
+
+<div class="node node-priv" id="n-bt-actualizar_pred" style="left:1240px;top:480px;width:300px"
+  data-tooltip='{"title":"BlobTracker._actualizar_prediccion_capsula(capsula)","sections":[{"label":"PARÁMETROS","content":"<span class=\"tt-param\">capsula</span> <span class=\"tt-type\">: dict</span> — cápsula congelada de contactos_activos<br><span class=\"tt-from\">Origen: _detectar_contactos (capsula_a o capsula_b)</span>"},{"label":"ACCIÓN","content":"px_pred += vx, py_pred += vy<br>vx *= FACTOR_AMORTIGUACION_CAPSULA<br>vy *= FACTOR_AMORTIGUACION_CAPSULA<br>frames_dentro += 1<br>Mantiene la predicción útil durante fusiones largas (factor ~0.97 en lugar de 0.50)"},{"label":"LLAMADA POR","content":"<span class=\"tt-call\">BlobTracker._detectar_contactos() — en contacto que continúa</span>"}]}'>
+  <div class="node-header"><span class="node-icon">📡</span><span class="node-name">_actualizar_pred_capsula(cap)</span><span class="node-badge">PRIV</span></div>
+  <div class="node-body">
+    <div class="param-line"><span class="param-name">capsula</span><span class="param-type">: dict</span><span class="param-origin">← contactos_activos</span></div>
+    <div class="param-line" style="color:#4b5563;font-size:9px">muta: px_pred, py_pred, vx, vy, frames_dentro</div>
+    <div class="return-line">↩ None (mutación in-place)</div>
+  </div>
+</div>
+
+<div class="node node-priv" id="n-bt-bboxes_contacto" style="left:1550px;top:480px;width:300px"
+  data-tooltip='{"title":"BlobTracker._bboxes_en_contacto(bbox_a, bbox_b, margen)","sections":[{"label":"PARÁMETROS","content":"<span class=\"tt-param\">bbox_a</span> <span class=\"tt-type\">: tuple(x1,y1,x2,y2,area)</span><br><span class=\"tt-from\">Origen: _buscar_bbox() → _detectar_contactos</span><br><span class=\"tt-param\">bbox_b</span> <span class=\"tt-type\">: tuple(x1,y1,x2,y2,area)</span><br><span class=\"tt-param\">margen</span> <span class=\"tt-type\">: int</span> ← UMBRAL_CONTACTO_BBOX (config)"},{"label":"LÓGICA","content":"Expande ambas bboxes por margen antes de comprobar solapamiento. Un margen>0 detecta contacto antes del solapamiento real."},{"label":"RETORNA","content":"<span class=\"tt-ret\">bool</span> — True si se solapan o están a ≤ margen px"},{"label":"LLAMADA POR","content":"<span class=\"tt-call\">BlobTracker._detectar_contactos()</span>"}]}'>
+  <div class="node-header"><span class="node-icon">📦</span><span class="node-name">_bboxes_en_contacto(...)</span><span class="node-badge">PRIV</span></div>
+  <div class="node-body">
+    <div class="param-line"><span class="param-name">bbox_a, bbox_b</span><span class="param-type">: tuple</span><span class="param-origin">← _buscar_bbox</span></div>
+    <div class="param-line"><span class="param-name">margen</span><span class="param-type">: int</span><span class="param-origin">← UMBRAL_CONTACTO_BBOX</span></div>
+    <div class="return-line">↩ <span class="param-type">bool</span></div>
+  </div>
+</div>
+
+<!-- Row 4: main tracking methods -->
+<div class="node node-priv" id="n-bt-detectar_contactos" style="left:920px;top:650px;width:400px"
+  data-tooltip='{"title":"BlobTracker._detectar_contactos(bboxes)","sections":[{"label":"PARÁMETROS","content":"<span class=\"tt-param\">bboxes</span> <span class=\"tt-type\">: dict{(cx,cy):(x1,y1,x2,y2,area)}</span><br><span class=\"tt-from\">Origen: cannyEdge (contour processing) → actualizar</span>"},{"label":"LÓGICA COMPLETA","content":"• Detecta pares de tracks visibles cuyas bboxes se solapan<br>• Un ID solo puede estar en UN contacto a la vez<br>• Si contacto nuevo: _congelar_capsula para ambos IDs<br>• Si contacto continúa: _actualizar_prediccion_capsula<br>• Si frames_contacto == FRAMES_MIN_CONTACTO → fusión real (pares_fusionados)<br>• Pares sin contacto → revisar separación real vs fusión"},{"label":"LLAMA A","content":"<span class=\"tt-call\">_buscar_bbox · _bboxes_en_contacto · _congelar_capsula · _actualizar_prediccion_capsula</span>"},{"label":"MODIFICA","content":"contactos_activos, pares_fusionados"},{"label":"LLAMADA POR","content":"<span class=\"tt-call\">BlobTracker.actualizar() — antes de la asignación greedy</span>"}]}'>
+  <div class="node-header"><span class="node-icon">🔗</span><span class="node-name">_detectar_contactos(bboxes)</span><span class="node-badge">PRIV</span></div>
+  <div class="node-body">
+    <div class="param-line"><span class="param-name">bboxes</span><span class="param-type">: dict</span><span class="param-origin">← cannyEdge → actualizar</span></div>
+    <div class="param-line" style="margin-top:4px">llama: <span style="color:#6b7280">_buscar_bbox · _bboxes_en_contacto · _congelar_capsula · _actualizar_pred_capsula</span></div>
+    <div class="return-line">↩ None · modifica contactos_activos, pares_fusionados</div>
+  </div>
+</div>
+
+<div class="node node-priv" id="n-bt-buscar_bbox" style="left:1330px;top:650px;width:290px"
+  data-tooltip='{"title":"BlobTracker._buscar_bbox(cx, cy, bboxes)","sections":[{"label":"PARÁMETROS","content":"<span class=\"tt-param\">cx, cy</span> <span class=\"tt-type\">: int</span> — centro del track<br><span class=\"tt-from\">Origen: tracks[id][\"cx\"], tracks[id][\"cy\"]</span><br><span class=\"tt-param\">bboxes</span> <span class=\"tt-type\">: dict</span> — bboxes del frame actual"},{"label":"RETORNA","content":"<span class=\"tt-ret\">tuple(x1,y1,x2,y2,area)</span> — bbox cuyo centroide está más cerca de (cx,cy)<br><span class=\"tt-ret\">None</span> — si bboxes está vacío"},{"label":"LLAMADA POR","content":"<span class=\"tt-call\">BlobTracker._detectar_contactos()</span>"}]}'>
+  <div class="node-header"><span class="node-icon">🔎</span><span class="node-name">_buscar_bbox(cx, cy, bboxes)</span><span class="node-badge">PRIV</span></div>
+  <div class="node-body">
+    <div class="param-line"><span class="param-name">cx, cy</span><span class="param-type">: int</span><span class="param-origin">← tracks[id]</span></div>
+    <div class="param-line"><span class="param-name">bboxes</span><span class="param-type">: dict</span><span class="param-origin">← cannyEdge</span></div>
+    <div class="return-line">↩ <span class="param-type">tuple</span> bbox | None</div>
+  </div>
+</div>
+
+<div class="node node-priv" id="n-bt-resolver_sep" style="left:1630px;top:650px;width:300px"
+  data-tooltip='{"title":"BlobTracker._resolver_separacion(cx, cy)","sections":[{"label":"PARÁMETROS","content":"<span class=\"tt-param\">cx</span> <span class=\"tt-type\">: int</span> — X de la detección nueva<br><span class=\"tt-from\">Origen: centroide no asignado en actualizar</span><br><span class=\"tt-param\">cy</span> <span class=\"tt-type\">: int</span> — Y de la detección nueva"},{"label":"LÓGICA","content":"Busca en contactos_activos la cápsula (confirmada) cuya px_pred esté más cerca de (cx,cy). Ignora cápsulas ya liberadas o contactos no confirmados."},{"label":"RETORNA","content":"<span class=\"tt-ret\">(int, tuple)</span> — (id_recuperado, par_origen) si encontró candidato<br><span class=\"tt-ret\">(None, None)</span> — si no hay contacto cercano"},{"label":"LLAMADA POR","content":"<span class=\"tt-call\">BlobTracker.actualizar() — para detecciones sin track asignado</span>"}]}'>
+  <div class="node-header"><span class="node-icon">🔓</span><span class="node-name">_resolver_separacion(cx, cy)</span><span class="node-badge">PRIV</span></div>
+  <div class="node-body">
+    <div class="param-line"><span class="param-name">cx, cy</span><span class="param-type">: int</span><span class="param-origin">← detección sin asignar</span></div>
+    <div class="return-line">↩ <span class="param-type">(id_recuperado, par)</span> | (None, None)</div>
+  </div>
+</div>
+
+<!-- Row 5 -->
+<div class="node node-priv" id="n-bt-cerrar_contacto" style="left:920px;top:820px;width:380px"
+  data-tooltip='{"title":"BlobTracker._cerrar_contacto_por_separacion(par, id_liberado)","sections":[{"label":"PARÁMETROS","content":"<span class=\"tt-param\">par</span> <span class=\"tt-type\">: tuple(tid_a, tid_b)</span> — el par de IDs en contacto<br><span class=\"tt-from\">Origen: _resolver_separacion() → actualizar</span><br><span class=\"tt-param\">id_liberado</span> <span class=\"tt-type\">: int</span> — el ID que se está separando<br><span class=\"tt-from\">Origen: id_recuperado de _resolver_separacion</span>"},{"label":"LÓGICA","content":"Marca la cápsula del id_liberado como liberado:True.<br>Si ambas cápsulas están liberadas → elimina el par de contactos_activos y lo quita de pares_fusionados."},{"label":"LLAMADA POR","content":"<span class=\"tt-call\">BlobTracker.actualizar() — cuando un blob reaparece de una fusión</span>"}]}'>
+  <div class="node-header"><span class="node-icon">🔒</span><span class="node-name">_cerrar_contacto_por_separacion(...)</span><span class="node-badge">PRIV</span></div>
+  <div class="node-body">
+    <div class="param-line"><span class="param-name">par</span><span class="param-type">: tuple</span><span class="param-origin">← _resolver_separacion</span></div>
+    <div class="param-line"><span class="param-name">id_liberado</span><span class="param-type">: int</span><span class="param-origin">← id_recuperado</span></div>
+    <div class="return-line">↩ None · modifica contactos_activos</div>
+  </div>
+</div>
+
+<div class="node node-priv" id="n-bt-pos_esperada" style="left:1310px;top:820px;width:310px"
+  data-tooltip='{"title":"BlobTracker._posicion_esperada(track_id, pasos=3)","sections":[{"label":"PARÁMETROS","content":"<span class=\"tt-param\">track_id</span> <span class=\"tt-type\">: int</span> — ID del track a proyectar<br><span class=\"tt-param\">pasos</span> <span class=\"tt-type\">: int</span> = 3 — ventana de historial"},{"label":"LÓGICA","content":"Calcula dx,dy como media de los últimos N desplazamientos del historial y proyecta la posición esperada."},{"label":"RETORNA","content":"<span class=\"tt-ret\">(int, int)</span> — (x_esperado, y_esperado)"},{"label":"LLAMADA POR","content":"<span class=\"tt-call\">BlobTracker.actualizar() — para calcular dist en la matriz de scoring</span>"}]}'>
+  <div class="node-header"><span class="node-icon">📍</span><span class="node-name">_posicion_esperada(id, pasos)</span><span class="node-badge">PRIV</span></div>
+  <div class="node-body">
+    <div class="param-line"><span class="param-name">track_id</span><span class="param-type">: int</span><span class="param-origin">← actualizar</span></div>
+    <div class="param-line"><span class="param-name">pasos</span><span class="param-type">: int</span><span class="param-origin">= 3</span></div>
+    <div class="return-line">↩ <span class="param-type">(x, y)</span> posición proyectada</div>
+  </div>
+</div>
+
+<!-- Row 6: actualizar — the big one -->
+<div class="node node-pub" id="n-bt-actualizar" style="left:920px;top:1010px;width:1420px"
+  data-tooltip='{"title":"BlobTracker.actualizar(centroides, reserva, bordes, bboxes, umbral_borde=10)","sections":[{"label":"PARÁMETROS","content":"<span class=\"tt-param\">centroides</span> <span class=\"tt-type\">: list[(cx,cy)]</span> — de findContours en cannyEdge<br><span class=\"tt-param\">reserva</span> <span class=\"tt-type\">: ReservaBordes</span> — instancia de cannyEdge<br><span class=\"tt-param\">bordes</span> <span class=\"tt-type\">: dict</span> — de clasificar_bordes → cannyEdge<br><span class=\"tt-param\">bboxes</span> <span class=\"tt-type\">: dict</span> — {(cx,cy):(x1,y1,x2,y2,area)} del frame<br><span class=\"tt-param\">umbral_borde</span> <span class=\"tt-type\">: int</span> ← UMBRAL_BORDE (config)"},{"label":"FLUJO INTERNO","content":"1. _predecir() — actualiza cx_pred/cy_pred<br>2. _detectar_contactos(bboxes) — detecta fusiones<br>3. Construir ids_excluidos_greedy, ids_en_contacto<br>4. SCORING GREEDY: matriz (detecciones × tracks), usando dist+angulo+area+dir<br>   - dist: _posicion_esperada + dist euclidiana<br>   - ang_score: _angulo + _diff_angulo<br>   - area_score: área actual vs historial<br>   - dir_score: penaliza dirección opuesta<br>5. Asignar mínimos de la matriz (greedy)<br>6. Detecciones sin asignar: _resolver_separacion, guard de absorción, rescate, nueva entrada (reserva)<br>7. Tracks sin asignar: acumular edad_invisible, detectar_borde → reserva.registrar_salida<br>8. Proteger IDs en contacto de limpieza<br>9. Eliminar tracks muertos"},{"label":"RETORNA","content":"<span class=\"tt-ret\">list[(cx, cy, tid, vx, vy)]</span> — tracks visibles en este frame"},{"label":"LLAMADA POR","content":"<span class=\"tt-call\">cannyEdge() — cada frame del loop principal</span>"}]}'>
+  <div class="node-header">
+    <span class="node-icon">⚙️</span>
+    <span class="node-name">actualizar(centroides, reserva, bordes, bboxes, umbral_borde) — MÉTODO CENTRAL</span>
+    <span class="node-badge">PUB</span>
+  </div>
+  <div class="node-body">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px 16px">
+      <div>
+        <div class="param-line" style="color:#22c55e;font-size:9px;font-weight:700;margin-bottom:3px">PARÁMETROS ENTRADA</div>
+        <div class="param-line"><span class="param-name">centroides</span><span class="param-type">:list[(cx,cy)]</span><span class="param-origin">←cannyEdge</span></div>
+        <div class="param-line"><span class="param-name">reserva</span><span class="param-type">:ReservaBordes</span><span class="param-origin">←cannyEdge</span></div>
+        <div class="param-line"><span class="param-name">bordes</span><span class="param-type">:dict</span><span class="param-origin">←clasificar_bordes</span></div>
+        <div class="param-line"><span class="param-name">bboxes</span><span class="param-type">:dict</span><span class="param-origin">←cannyEdge</span></div>
+        <div class="param-line"><span class="param-name">umbral_borde</span><span class="param-type">:int</span><span class="param-origin">←UMBRAL_BORDE</span></div>
+      </div>
+      <div>
+        <div class="param-line" style="color:#22c55e;font-size:9px;font-weight:700;margin-bottom:3px">LLAMA A (INTERNOS)</div>
+        <div class="param-line">→ <span class="param-name">_predecir</span>()</div>
+        <div class="param-line">→ <span class="param-name">_detectar_contactos</span>(bboxes)</div>
+        <div class="param-line">→ <span class="param-name">_posicion_esperada</span>(tid,3)</div>
+        <div class="param-line">→ <span class="param-name">_angulo</span>(vx,vy)</div>
+        <div class="param-line">→ <span class="param-name">_diff_angulo</span>(a1,a2)</div>
+        <div class="param-line">→ <span class="param-name">_calcular_velocidad</span>(hist)</div>
+        <div class="param-line">→ <span class="param-name">agregar_track</span>(id,cx,cy)</div>
+        <div class="param-line">→ <span class="param-name">_resolver_separacion</span>(cx,cy)</div>
+        <div class="param-line">→ <span class="param-name">_cerrar_contacto</span>(par,id)</div>
+      </div>
+      <div>
+        <div class="param-line" style="color:#22c55e;font-size:9px;font-weight:700;margin-bottom:3px">LLAMA A (EXTERNOS)</div>
+        <div class="param-line">→ <span class="param-name">detectar_borde</span>(cx,cy,bordes)</div>
+        <div class="param-line">→ <span class="param-name">reserva.registrar_salida</span>(id,borde)</div>
+        <div class="param-line">→ <span class="param-name">reserva.registrar_entrada</span>(borde)</div>
+        <div class="param-line">→ <span class="param-name">reserva.confirmar_activo</span>(id)</div>
+        <div style="margin-top:8px" class="return-line">
+          ↩ <span class="param-type">list[(cx,cy,tid,vx,vy)]</span> visibles
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- end canvas -->
+</div><!-- end wrapper -->
+
+<div id="tooltip"></div>
 
 <script>
-// Estructura: sections[] con vars[] donde cada var tiene:
-//   n = nombre, d = descripción, p = array de flujos de parámetro (opcional)
-// p usa → para "sale hacia" y ← para "entra desde"
-const data = {
+// ─────────────────────────────────────────────
+//  ARROW DEFINITIONS
+// ─────────────────────────────────────────────
+const edges = [
+  // __main__ → cannyEdge
+  { from:'n-main', to:'n-cannyedge', type:'call', label:'' },
 
-  reserva: {
-    badge:'Clase', badgeClass:'badge-purple',
-    title:'ReservaBordes',
-    sub:'Sistema de colas FIFO. Guarda los IDs de personas que salieron del área y los devuelve cuando esa misma persona vuelve a entrar por el mismo borde.',
-    sections:[
-      {title:'Variables del __init__', vars:[
-        {n:'max_ids', d:'Número máximo de personas que pueden estar en el área al mismo tiempo.',
-         p:['← entra como argumento desde cannyEdge() al crear la instancia: ReservaBordes(max_ids=MAX_IDS)']},
-        {n:'reservas', d:'Diccionario con 4 colas (deque), una por borde. Aquí esperan los IDs hasta que vuelvan a entrar.',
-         p:['→ registrar_salida() escribe en reservas[borde].append(track_id)','→ registrar_entrada() lee de reservas[borde].popleft()']},
-        {n:'ids_en_reserva', d:'Set de IDs que están en alguna cola esperando reentrar. Evita contarlos como personas nuevas.',
-         p:['→ registrar_salida() añade IDs aquí','→ registrar_entrada() y confirmar_activo() los quitan de aquí']},
-        {n:'ids_activos', d:'Set de IDs que están dentro del área jugando ahora mismo.',
-         p:['→ confirmar_activo() añade IDs aquí','→ registrar_salida() los descarta de aquí']},
-        {n:'total_ids', d:'Contador que sube cuando se crea un ID completamente nuevo. Garantiza que nunca se repitan.',
-         p:['→ registrar_entrada() lo incrementa cuando la cola del borde está vacía y hay cupo']},
-      ]},
-      {title:'Métodos', vars:[
-        {n:'reset()', d:'Limpia todo: vacía las 4 colas y los sets. Se llama cuando el video termina y reinicia.',
-         p:['← lo llama cannyEdge() cuando cap.read() devuelve ret=False (fin del video)']},
-        {n:'registrar_salida(track_id, borde)', d:'Cuando un blob desaparece por un borde, mete su ID a la cola de ese borde para que espere.',
-         p:['← track_id viene de tid al iterar ids_activos en actualizar()','← borde viene del return de detectar_borde(ultima_cx, ultima_cy, bordes, umbral_borde)']},
-        {n:'registrar_entrada(borde)', d:'Cuando aparece un blob en un borde, saca el primer ID de esa cola FIFO. Si está vacía y hay cupo, crea un ID nuevo.',
-         p:['← borde viene del return de detectar_borde() en actualizar()','→ devuelve nuevo_id que actualizar() usa para llamar a agregar_track(nuevo_id, cx, cy)']},
-        {n:'confirmar_activo(track_id)', d:'Marca un ID como "ya está adentro jugando": lo añade a ids_activos y lo quita de ids_en_reserva.',
-         p:['← track_id viene de nuevo_id o id_recuperado en actualizar()']},
-      ]},
-      {title:'Conecta con', vars:[]},
-    ],
-    connects:['actualizar()','detectar_borde()','cannyEdge()']
-  },
+  // cannyEdge → global functions
+  { from:'n-cannyedge', to:'n-calibrar_roi',     type:'call', label:'cap' },
+  { from:'n-cannyedge', to:'n-clasificar_bordes',type:'call', label:'roi_poly' },
+  { from:'n-cannyedge', to:'n-callback',         type:'call', label:'5× trackbar' },
+  
+  // calibrar_roi → mouse_callback
+  { from:'n-calibrar_roi', to:'n-mouse_callback', type:'call', label:'setMouseCallback' },
 
-  tracker: {
-    badge:'Clase', badgeClass:'badge-purple',
-    title:'BlobTracker',
-    sub:'El cerebro del sistema. Recibe los blobs detectados cada frame y decide cuál ID le corresponde a cada uno, manteniendo coherencia entre frames.',
-    sections:[
-      {title:'Variables del __init__', vars:[
-        {n:'tracks', d:'El diccionario principal. Cada llave es un ID y el valor es otro dict con todos los datos de esa persona.',
-         p:['→ agregar_track() escribe entradas nuevas aquí','→ actualizar() lee y modifica cada track cada frame','→ _predecir() escribe cx_pred/cy_pred en cada track']},
-        {n:'next_id', d:'El próximo número disponible para un ID nuevo.',
-         p:['→ actualizar() lo usa como fallback si la reserva no tiene IDs y hay cupo']},
-        {n:'max_edad', d:'Frames máximos que puede estar invisible un blob antes de ser eliminado.',
-         p:['← entra como argumento max_edad_invisible desde cannyEdge()','→ actualizar() lo compara con t[edad_invisible] para decidir si borrar el track']},
-        {n:'vel_history', d:'Cuántas posiciones anteriores se guardan para calcular la velocidad promedio.',
-         p:['← entra como argumento desde cannyEdge()','→ actualizar() limita len(t[historial]) a este valor','→ _calcular_velocidad() recibe el historial ya recortado']},
-        {n:'max_dist', d:'Distancia máxima en píxeles entre posición predicha y detección real para considerarlos el mismo blob.',
-         p:['← entra como argumento desde cannyEdge()','→ actualizar() descarta scores donde dist > self.max_dist','→ también es radio de búsqueda en rescate y absorción de fusiones']},
-        {n:'fusiones_activas', d:'Dict que registra qué IDs fueron absorbidos dentro de otro blob. Permite recuperarlos al separarse.',
-         p:['→ actualizar() escribe aquí al detectar que un track desapareció cerca de otro blob activo','→ actualizar() lee aquí cuando un blob sin asignar podría salir de una fusión']},
-        {n:'frames_juntos', d:'Cuenta frames consecutivos que llevan dos blobs muy cerca. Al superar el umbral se marcan como fusionados.',
-         p:['→ _actualizar_proximidad() lo escribe y lee cada frame']},
-        {n:'pares_fusionados', d:'Set de pares (id_menor, id_mayor) que están oficialmente fusionados ahora mismo.',
-         p:['→ _actualizar_proximidad() escribe aquí cuando frames_juntos >= FRAMES_PARA_FUSION','→ cannyEdge() lo lee para dibujar etiquetas [ID1, ID2] con borde más grueso']},
-      ]},
-      {title:'Métodos internos (ver sidebar)', vars:[]},
-      {title:'Conecta con', vars:[]},
-    ],
-    connects:['ReservaBordes','detectar_borde()','_predecir()','_calcular_velocidad()','_angulo()','agregar_track()','_actualizar_proximidad()','_posicion_esperada()','actualizar() ★']
-  },
+  // detectar_borde → punto_cerca_segmento
+  { from:'n-detectar_borde', to:'n-punto_cerca', type:'call', label:'px,py,p1,p2' },
 
-  main: {
-    badge:'Setup principal', badgeClass:'badge-teal',
-    title:'cannyEdge()',
-    sub:'El director de orquesta. Abre el video, llama a la calibración, crea ventanas y trackbars, instancia el tracker y la reserva, y ejecuta el loop infinito frame a frame.',
-    sections:[
-      {title:'Variables locales importantes', vars:[
-        {n:'cap', d:'El video abierto con cv.VideoCapture. Todo el loop lee frames de aquí.',
-         p:['→ se pasa como parámetro cap a calibrar_roi(cap)']},
-        {n:'fps / delay', d:'Frames por segundo del video. delay es el tiempo de espera entre frames para respetar la velocidad original.',
-         p:['→ delay se usa en cv.waitKey(delay) al final del loop']},
-        {n:'roi_poly', d:'El polígono del área de juego. Viene del return de calibrar_roi().',
-         p:['← viene del return de calibrar_roi(cap)','→ se pasa como parámetro a clasificar_bordes(roi_poly)','→ se usa en cv.fillPoly y cv.polylines dentro del loop']},
-        {n:'bordes', d:'El diccionario de bordes clasificados. Viene del return de clasificar_bordes().',
-         p:['← viene del return de clasificar_bordes(roi_poly)','→ se pasa como parámetro bordes a actualizar(centroides, reserva, bordes, bboxes, UMBRAL_BORDE)']},
-        {n:'reserva', d:'La instancia de ReservaBordes que gestiona los IDs durante todo el video.',
-         p:['→ se pasa como parámetro reserva a actualizar()','→ se llama reserva.reset() cuando el video termina']},
-        {n:'tracker', d:'La instancia de BlobTracker que hace el tracking frame a frame.',
-         p:['→ se llama tracker.actualizar(...) cada frame','→ se lee tracker.pares_fusionados para dibujar etiquetas','→ se llama tracker.reset() cuando el video termina']},
-        {n:'colors', d:'Array de 500 colores aleatorios. Cada ID tiene su color fijo calculado como colors[tid % 500].',
-         p:[]},
-        {n:'historial_areas', d:'Guarda el historial de tamaños de blob por ID. Se llena en el loop de dibujo con el área del frame actual.',
-         p:[]},
-        {n:'mostrar_filtros', d:'Variable global booleana. True = muestra la máscara binaria; False = muestra el video original con los IDs encima.',
-         p:[]},
-        {n:'blur_k / min_val / max_val / close_k / open_k / smooth_r', d:'Valores leídos de los trackbars cada frame. Controlan los filtros de imagen en tiempo real.',
-         p:['→ smooth_r se pasa como parámetro radio a suavizar_mask(mask, smooth_r)']},
-        {n:'mask', d:'La imagen binaria (blanco/negro) resultado de aplicar todos los filtros. El blanco son los blobs detectados.',
-         p:['→ se pasa como parámetro mask a suavizar_mask(mask, smooth_r)','← suavizar_mask() devuelve la máscara modificada y cannyEdge() la reasigna a mask']},
-        {n:'centroides / bboxes', d:'centroides: lista de (cx,cy) de cada blob válido. bboxes: dict {(cx,cy): (x1,y1,x2,y2,area)}.',
-         p:['→ ambos se pasan como parámetros a actualizar(centroides, reserva, bordes, bboxes, UMBRAL_BORDE)']},
-        {n:'video_terminado', d:'Flag para detectar el fin del video y reiniciarlo sin hacer doble reset.',
-         p:[]},
-      ]},
-      {title:'Conecta con', vars:[]},
-    ],
-    connects:['calibrar_roi()','clasificar_bordes()','ReservaBordes','BlobTracker','suavizar_mask()','actualizar()']
-  },
+  // cannyEdge → ReservaBordes
+  { from:'n-cannyedge', to:'n-cls-reserva', type:'data', label:'MAX_IDS' },
+  // cannyEdge → BlobTracker
+  { from:'n-cannyedge', to:'n-cls-tracker', type:'data', label:'config params' },
 
-  calibrar:{
-    badge:'Setup', badgeClass:'badge-teal',
-    title:'calibrar_roi(cap)',
-    sub:'Pantalla interactiva de configuración inicial. Muestra el primer frame del video y deja al usuario marcar las esquinas del área de juego con clics.',
-    sections:[
-      {title:'Parámetros y variables', vars:[
-        {n:'cap', d:'El video abierto del que se lee el primer frame para usarlo como fondo de calibración.',
-         p:['← entra como parámetro desde cannyEdge(), donde cap = cv.VideoCapture(VIDEO_PATH)']},
-        {n:'ret', d:'True si el frame se leyó bien. Si es False el video está roto y la función retorna None.',
-         p:[]},
-        {n:'frame', d:'El primer fotograma del video, usado como fondo para que el usuario vea dónde está marcando.',
-         p:[]},
-        {n:'win_cal', d:'Nombre de la ventana de calibración que abre OpenCV. OpenCV identifica ventanas por su nombre de cadena.',
-         p:[]},
-        {n:'display', d:'Copia del frame donde se dibujan los puntos y líneas encima, sin modificar el original.',
-         p:[]},
-        {n:'overlay', d:'Otra copia usada solo para el polígono semitransparente. Se mezcla con display usando addWeighted.',
-         p:[]},
-        {n:'puntos_roi', d:'Variable global (lista). Acumula los (x,y) que el usuario marca con clics. La llena mouse_callback.',
-         p:['← mouse_callback() escribe en esta lista global cada vez que el usuario hace clic izquierdo']},
-        {n:'key', d:'La tecla presionada en cada iteración. Enter confirma, Z deshace el último punto, R reinicia.',
-         p:[]},
-        {n:'return: roi_poly', d:'Array numpy con todos los puntos confirmados. Es el polígono del área de juego.',
-         p:['→ cannyEdge() lo recibe como roi_poly','→ roi_poly luego se pasa a clasificar_bordes(roi_poly)','→ roi_poly también se usa directamente en el loop para la máscara ROI']},
-      ]},
-      {title:'Conecta con', vars:[]},
-    ],
-    connects:['mouse_callback()','cannyEdge()']
-  },
+  // cannyEdge → actualizar
+  { from:'n-cannyedge', to:'n-bt-actualizar', type:'call', label:'centroides,reserva,bordes,bboxes' },
 
-  clasificar:{
-    badge:'Setup', badgeClass:'badge-teal',
-    title:'clasificar_bordes(roi_poly)',
-    sub:'Recibe el polígono del área y le pone nombre a cada lado: superior, inferior, izquierdo o derecho. Se llama una sola vez al inicio.',
-    sections:[
-      {title:'Parámetros y variables', vars:[
-        {n:'roi_poly', d:'El polígono del área de juego como array numpy de puntos.',
-         p:['← entra como parámetro desde cannyEdge(), donde viene del return de calibrar_roi()']},
-        {n:'puntos', d:'Los mismos puntos convertidos a lista Python para poder recorrerlos en el for.',
-         p:[]},
-        {n:'n', d:'Cuántos puntos tiene el polígono (cuántos clics dio el usuario en la calibración).',
-         p:[]},
-        {n:'segmentos', d:'Lista de dicts, uno por cada lado del polígono. Cada dict tiene p1, p2 y el punto medio mx, my.',
-         p:[]},
-        {n:'p1, p2', d:'Los dos extremos de cada lado del polígono al recorrerlo.',
-         p:['→ se guardan en segmentos y luego en bordes[nombre][p1] y bordes[nombre][p2]','→ detectar_borde() los lee del diccionario bordes para pasarlos a punto_cerca_segmento(px, py, p1, p2, umbral)']},
-        {n:'mx, my', d:'Coordenadas del punto medio de cada lado. El de my más pequeño (más arriba en pantalla) es el borde superior, el mayor es el inferior, etc.',
-         p:[]},
-        {n:'bordes', d:'El diccionario resultado con claves: superior, inferior, izquierdo, derecho.',
-         p:['→ return: cannyEdge() lo recibe como bordes','→ se pasa como parámetro bordes a actualizar()','→ se pasa como parámetro bordes a detectar_borde()']},
-      ]},
-      {title:'Conecta con', vars:[]},
-    ],
-    connects:['cannyEdge()','detectar_borde()','actualizar()']
-  },
+  // calibrar_roi → clasificar_bordes (return flow)
+  { from:'n-calibrar_roi', to:'n-clasificar_bordes', type:'ret', label:'roi_poly→' },
 
-  detectar:{
-    badge:'Helper runtime', badgeClass:'badge-coral',
-    title:'detectar_borde(cx, cy, bordes, umbral)',
-    sub:'Pregunta a cada borde del área si el punto (cx, cy) está cerca de él. Devuelve el nombre del borde o None si el blob está en el interior.',
-    sections:[
-      {title:'Parámetros y variables', vars:[
-        {n:'cx, cy', d:'Coordenadas del centro del blob a evaluar. cx = center x, cy = center y.',
-         p:['← en actualizar(): cx,cy vienen de centroides[di] para blobs sin asignar, o de ultima_cx/ultima_cy para tracks perdidos']},
-        {n:'bordes', d:'El diccionario con los 4 bordes clasificados.',
-         p:['← entra como parámetro desde actualizar(), donde viene del return de clasificar_bordes()']},
-        {n:'umbral', d:'Distancia máxima en píxeles para considerar que el blob toca ese borde.',
-         p:['← en actualizar() se pasa como umbral_borde, cuyo valor viene de UMBRAL_BORDE en config.py']},
-        {n:'nombre, seg', d:'Nombre del borde (ej: "inferior") y su dict {p1, p2, mx, my} al iterar bordes.',
-         p:['→ seg[p1] y seg[p2] se pasan como p1, p2 a punto_cerca_segmento(cx, cy, seg[p1], seg[p2], umbral)']},
-        {n:'return: nombre o None', d:'El nombre del borde si el blob está cerca de alguno, o None si está en el interior del área.',
-         p:['→ en actualizar() se recibe como borde_entrada o borde_salida','→ borde_entrada se pasa a reserva.registrar_entrada(borde_entrada)','→ borde_salida se pasa a reserva.registrar_salida(tid, borde_salida)']},
-      ]},
-      {title:'Conecta con', vars:[]},
-    ],
-    connects:['punto_cerca_segmento()','actualizar()','ReservaBordes']
-  },
+  // actualizar internals
+  { from:'n-bt-actualizar', to:'n-bt-predecir',        type:'call', label:'' },
+  { from:'n-bt-actualizar', to:'n-bt-detectar_contactos', type:'call', label:'bboxes' },
+  { from:'n-bt-actualizar', to:'n-bt-pos_esperada',    type:'call', label:'tid,pasos=3' },
+  { from:'n-bt-actualizar', to:'n-bt-angulo',          type:'call', label:'vx,vy' },
+  { from:'n-bt-actualizar', to:'n-bt-diff_angulo',     type:'call', label:'a1,a2' },
+  { from:'n-bt-actualizar', to:'n-bt-calc_vel',        type:'call', label:'historial' },
+  { from:'n-bt-actualizar', to:'n-bt-agregar',         type:'call', label:'id,cx,cy' },
+  { from:'n-bt-actualizar', to:'n-bt-resolver_sep',    type:'call', label:'cx,cy' },
+  { from:'n-bt-actualizar', to:'n-bt-cerrar_contacto', type:'call', label:'par,id' },
+  { from:'n-bt-actualizar', to:'n-detectar_borde',     type:'call', label:'cx,cy,bordes' },
+  { from:'n-bt-actualizar', to:'n-rb-salida',          type:'call', label:'tid,borde' },
+  { from:'n-bt-actualizar', to:'n-rb-entrada',         type:'call', label:'borde' },
+  { from:'n-bt-actualizar', to:'n-rb-confirmar',       type:'call', label:'id' },
 
-  punto:{
-    badge:'Helper runtime', badgeClass:'badge-coral',
-    title:'punto_cerca_segmento(px, py, p1, p2, umbral)',
-    sub:'Matemática pura: calcula si un punto está a menos de "umbral" píxeles de un segmento de línea. La usa detectar_borde() internamente.',
-    sections:[
-      {title:'Parámetros y variables', vars:[
-        {n:'px, py', d:'Las coordenadas del punto a evaluar.',
-         p:['← entra desde detectar_borde(), que pasa cx, cy del blob como px, py']},
-        {n:'p1, p2', d:'Los dos extremos del segmento de línea (un lado del polígono del área).',
-         p:['← entra desde detectar_borde(), que lee seg[p1] y seg[p2] del diccionario bordes']},
-        {n:'umbral', d:'Distancia máxima permitida en píxeles para decir "está cerca".',
-         p:['← entra desde detectar_borde(), que le pasa su propio parámetro umbral']},
-        {n:'x1,y1,x2,y2', d:'Los mismos p1 y p2 desempacados para hacer las operaciones matemáticas.',
-         p:[]},
-        {n:'dx, dy', d:'Diferencia en X e Y entre los dos extremos. Describe la dirección y longitud del segmento.',
-         p:[]},
-        {n:'largo2', d:'Longitud del segmento al cuadrado. Se usa al cuadrado para evitar una raíz cuadrada innecesaria.',
-         p:[]},
-        {n:'t', d:'Número entre 0 y 1 que indica en qué punto del segmento cae la proyección del blob. 0 = extremo p1, 1 = extremo p2.',
-         p:[]},
-        {n:'proj_x, proj_y', d:'Coordenadas del punto del segmento más cercano al blob.',
-         p:[]},
-        {n:'dist', d:'La distancia final entre el blob y ese punto más cercano del segmento.',
-         p:['→ se compara con umbral: si dist <= umbral devuelve True a detectar_borde(), que entonces sabe que ese blob está en ese borde']},
-      ]},
-      {title:'Conecta con', vars:[]},
-    ],
-    connects:['detectar_borde()']
-  },
+  // _detectar_contactos internals
+  { from:'n-bt-detectar_contactos', to:'n-bt-buscar_bbox',      type:'call', label:'cx,cy,bboxes' },
+  { from:'n-bt-detectar_contactos', to:'n-bt-bboxes_contacto',  type:'call', label:'bbox_a,bbox_b' },
+  { from:'n-bt-detectar_contactos', to:'n-bt-congelar',         type:'call', label:'tid' },
+  { from:'n-bt-detectar_contactos', to:'n-bt-actualizar_pred',  type:'call', label:'capsula' },
 
-  suavizar:{
-    badge:'Helper runtime', badgeClass:'badge-coral',
-    title:'suavizar_mask(mask, radio)',
-    sub:'Redondea los bordes de los blobs con cierre morfológico elíptico. Dilata con forma circular primero y luego erode para conservar el área. Radio 0 = sin efecto.',
-    sections:[
-      {title:'Parámetros y variables', vars:[
-        {n:'mask', d:'La imagen binaria con los blobs ya detectados y recortados al ROI.',
-         p:['← entra como parámetro desde cannyEdge(), donde mask es la imagen resultante de MORPH_OPEN + ROI mask']},
-        {n:'radio', d:'El radio del kernel elíptico. Controla cuánto se redondean los bordes.',
-         p:['← entra como parámetro desde cannyEdge(), donde smooth_r viene del trackbar "Smooth" (0-20)']},
-        {n:'k', d:'El kernel elíptico generado con getStructuringElement(MORPH_ELLIPSE). Es la plantilla circular para la operación morfológica.',
-         p:[]},
-        {n:'mask_suave', d:'La máscara resultante con bordes redondeados.',
-         p:['→ return: cannyEdge() lo recibe de vuelta como mask y lo usa directamente en findContours']},
-      ]},
-      {title:'Conecta con', vars:[]},
-    ],
-    connects:['cannyEdge()']
-  },
+  // _resolver_separacion → _cerrar_contacto (chain)
+  { from:'n-bt-resolver_sep', to:'n-bt-cerrar_contacto', type:'ret', label:'par_origen→' },
 
-  predecir:{
-    badge:'Método del tracker', badgeClass:'badge-amber',
-    title:'_predecir()',
-    sub:'Antes de ver el nuevo frame, estima dónde estará cada blob sumando su velocidad a su posición actual. Opera directamente sobre self.tracks sin recibir parámetros.',
-    sections:[
-      {title:'Variables', vars:[
-        {n:'t', d:'Cada track del diccionario self.tracks al iterar sobre sus valores.',
-         p:[]},
-        {n:'cx_pred', d:'Posición X predicha: t[cx] + t[vx]. Se escribe en el track.',
-         p:["→ actualizar() lee t[cx_pred] cuando un track queda sin asignar, para mover su posición fantasma hacia donde se esperaba"]},
-        {n:'cy_pred', d:'Posición Y predicha: t[cy] + t[vy]. Se escribe en el track.',
-         p:["→ actualizar() lee t[cy_pred] de la misma forma que cx_pred"]},
-      ]},
-      {title:'Conecta con', vars:[]},
-    ],
-    connects:['actualizar() (la llama al inicio de cada frame)']
-  },
+  // Global vars read/write
+  { from:'n-mouse_callback', to:'n-gvars', type:'data', label:'puntos_roi +='},
+  { from:'n-calibrar_roi',   to:'n-gvars', type:'data', label:'lee/escribe puntos_roi'},
+  { from:'n-cannyedge',      to:'n-gvars', type:'data', label:'mostrar_filtros toggle'},
+];
 
-  calcvel:{
-    badge:'Método del tracker', badgeClass:'badge-amber',
-    title:'_calcular_velocidad(historial)',
-    sub:'Promedia los últimos N desplazamientos del historial para obtener la velocidad actual. Recorta el resultado a MAX_VEL si es absurdamente alto.',
-    sections:[
-      {title:'Parámetros y variables', vars:[
-        {n:'historial', d:'Lista de las últimas posiciones (cx, cy) del blob.',
-         p:["← entra como parámetro desde actualizar(), que pasa t[historial] del track correspondiente"]},
-        {n:'vxs, vys', d:'Listas con los desplazamientos entre cada par de posiciones consecutivas del historial.',
-         p:[]},
-        {n:'vx, vy', d:'El promedio de todos esos desplazamientos. Es la velocidad calculada del blob.',
-         p:["→ return: actualizar() los asigna como t[vx], t[vy] del track tras la asignación exitosa","→ _predecir() los usará en el siguiente frame para calcular cx_pred/cy_pred"]},
-        {n:'MAX_VEL', d:'Límite de velocidad máxima por frame. Viene de config.py. Evita saltos absurdos por confusiones de blobs.',
-         p:['← viene de config.py como constante global importada con from config import *']},
-      ]},
-      {title:'Conecta con', vars:[]},
-    ],
-    connects:['actualizar()','_predecir()']
-  },
+// ─────────────────────────────────────────────
+//  TOOLTIP SYSTEM
+// ─────────────────────────────────────────────
+const tooltip = document.getElementById('tooltip');
 
-  angulo:{
-    badge:'Método del tracker', badgeClass:'badge-amber',
-    title:'_angulo(vx, vy) y _diff_angulo(a1, a2)',
-    sub:'_angulo convierte un vector de velocidad a grados. _diff_angulo calcula la diferencia real entre dos ángulos considerando que son circulares (0° y 359° tienen solo 1° de diferencia).',
-    sections:[
-      {title:'_angulo — parámetros y variables', vars:[
-        {n:'vx, vy', d:'Los componentes del vector de velocidad.',
-         p:["← desde actualizar(): se llama dos veces. Una con t[vx],t[vy] del track (ang_track) y otra con el desplazamiento (cx-t[cx], cy-t[cy]) del blob detectado (ang_det)"]},
-        {n:'return: ángulo en grados', d:'El ángulo que forma ese vector respecto al eje X horizontal.',
-         p:['→ actualizar() lo recibe como ang_track y ang_det, y los pasa a _diff_angulo(ang_track, ang_det)']},
-      ]},
-      {title:'_diff_angulo — parámetros y variables', vars:[
-        {n:'a1, a2', d:'Los dos ángulos a comparar, en grados.',
-         p:['← entra desde actualizar(), que le pasa ang_track y ang_det (los devueltos por _angulo())']},
-        {n:'diff', d:'Diferencia bruta entre los dos ángulos con % 360 para quedar en el rango 0-360.',
-         p:[]},
-        {n:'return: diferencia real', d:'Siempre entre 0° y 180°. 0° = mismo rumbo exacto, 180° = rumbos opuestos.',
-         p:['→ actualizar() lo divide entre 180.0 para obtener ang_score (valor entre 0 y 1) que entra en la fórmula de scores']},
-      ]},
-      {title:'Conecta con', vars:[]},
-    ],
-    connects:['actualizar()']
-  },
+function showTooltip(el, e) {
+  const raw = el.getAttribute('data-tooltip');
+  if (!raw) return;
+  let data;
+  try { data = JSON.parse(raw); } catch { return; }
 
-  agregar:{
-    badge:'Método del tracker', badgeClass:'badge-amber',
-    title:'agregar_track(track_id, cx, cy)',
-    sub:'Crea una entrada nueva en self.tracks para un blob recién detectado o recuperado de una fusión. Todos los campos se inicializan desde cero.',
-    sections:[
-      {title:'Parámetros y variables', vars:[
-        {n:'track_id', d:'El ID que se le asigna al nuevo track.',
-         p:['← entra desde actualizar(). Puede ser nuevo_id (ID nuevo o recuperado de la reserva) o id_recuperado (salió de una fusión activa)']},
-        {n:'cx, cy', d:'La posición inicial del blob en este frame.',
-         p:['← entra desde actualizar(), donde cx,cy vienen de centroides[di]']},
-        {n:'cx_pred, cy_pred', d:'Se inicializan igual a cx, cy porque aún no sabemos la dirección del blob.',
-         p:['→ _predecir() los actualizará en el siguiente frame usando vx y vy']},
-        {n:'vx, vy', d:'Velocidad inicial en cero porque el blob acaba de aparecer y no hay historial.',
-         p:['→ _calcular_velocidad() los calculará en el siguiente frame cuando el historial tenga al menos 2 posiciones']},
-        {n:'ultima_dir_x, ultima_dir_y', d:'Última dirección normalizada conocida. Empieza en 0,0 hasta que el blob se mueva lo suficiente.',
-         p:["→ actualizar() los escribe cuando vel_mag > 0.5 tras cada asignación exitosa","→ actualizar() los lee para calcular dir_score en la matriz de scores del siguiente frame"]},
-        {n:'historial', d:'Lista que empieza con [(cx, cy)]. Crece cada frame para poder calcular velocidad.',
-         p:['→ se pasa como parámetro historial a _calcular_velocidad(t[historial])']},
-        {n:'visible', d:'True: el blob se vio en el frame actual.',
-         p:['→ _actualizar_proximidad() filtra solo tracks con visible=True para comparar proximidad']},
-        {n:'edad_invisible', d:'Empieza en 0. Se incrementa cada frame que el tracker no encuentra este blob.',
-         p:["→ actualizar() lo compara con self.max_edad para decidir si el track muere y se borra de self.tracks"]},
-        {n:'area_hist', d:'Deque de máximo 20 valores con el historial de áreas (tamaños) del blob.',
-         p:['→ actualizar() calcula area_score comparando el área actual del blob detectado con np.mean(t[area_hist])']},
-      ]},
-      {title:'Conecta con', vars:[]},
-    ],
-    connects:['actualizar()','_predecir()','_calcular_velocidad()']
-  },
-
-  proximidad:{
-    badge:'Método del tracker', badgeClass:'badge-amber',
-    title:'_actualizar_proximidad(umbral_fusion)',
-    sub:'Cada frame revisa todos los pares de blobs visibles. Si dos llevan suficientes frames juntos los marca como fusionados. Si se separan, los desmarca.',
-    sections:[
-      {title:'Parámetros y variables', vars:[
-        {n:'umbral_fusion', d:'Distancia máxima en píxeles para considerar dos blobs "juntos".',
-         p:['← entra desde actualizar(), que le pasa UMBRAL_FUSION de config.py']},
-        {n:'tracks_visibles', d:'Lista de tuplas (tid, track) filtrando solo los que tienen visible=True en este frame.',
-         p:[]},
-        {n:'pares_cerca_ahora', d:'Set de pares (id_menor, id_mayor) que están cerca en este frame específico.',
-         p:[]},
-        {n:'par', d:'Tupla (id_menor, id_mayor) que identifica un par de blobs. Se usa como llave en self.frames_juntos.',
-         p:[]},
-        {n:'frames_juntos', d:'Dict en self que cuenta frames consecutivos cerca por par. Si un par deja de estar cerca, su contador se reinicia a 0.',
-         p:[]},
-        {n:'pares_fusionados', d:'Set en self de pares que superaron FRAMES_PARA_FUSION frames juntos. Son los "oficialmente fusionados".',
-         p:['→ cannyEdge() lo lee para dibujar etiquetas con formato [ID1, ID2] y grosor de borde mayor']},
-      ]},
-      {title:'Conecta con', vars:[]},
-    ],
-    connects:['actualizar() (la llama al final de cada frame)','cannyEdge() (lee pares_fusionados)']
-  },
-
-  posicion:{
-    badge:'Método del tracker', badgeClass:'badge-amber',
-    title:'_posicion_esperada(track_id, pasos)',
-    sub:'Proyecta dónde debería estar un blob ahora promediando sus últimos N desplazamientos. Más robusta que _predecir() para el cálculo del score de asignación.',
-    sections:[
-      {title:'Parámetros y variables', vars:[
-        {n:'track_id', d:'El ID del blob cuya posición queremos proyectar.',
-         p:['← entra desde actualizar(), que itera sobre ids_activos y pasa cada tid']},
-        {n:'pasos', d:'Cuántos desplazamientos anteriores usar en el promedio.',
-         p:['← actualizar() lo llama con pasos=3 fijo: self._posicion_esperada(tid, pasos=3)']},
-        {n:'h', d:'El historial de posiciones del track: self.tracks[track_id][historial].',
-         p:[]},
-        {n:'n', d:'min(pasos, len(h)-1). No puede pedir más desplazamientos de los que hay disponibles.',
-         p:[]},
-        {n:'dx, dy', d:'Promedio de los últimos n desplazamientos en X e Y.',
-         p:[]},
-        {n:'return: (px, py)', d:'La posición proyectada: posición actual del track + desplazamiento promedio.',
-         p:['→ actualizar() la recibe como px, py y calcula dist = sqrt((cx-px)²+(cy-py)²), que entra en la fórmula de scores']},
-      ]},
-      {title:'Conecta con', vars:[]},
-    ],
-    connects:['actualizar()']
-  },
-
-  actualizar:{
-    badge:'Método principal ★', badgeClass:'badge-amber',
-    title:'actualizar(centroides, reserva, bordes, bboxes, umbral_borde)',
-    sub:'La función más compleja. Se llama cada frame y orquesta 4 fases: asignación greedy, resolución de blobs sin asignar, gestión de tracks perdidos y limpieza. Ver diagrama aparte.',
-    sections:[
-      {title:'Parámetros de entrada', vars:[
-        {n:'centroides', d:'Lista de (cx, cy) de los blobs detectados en este frame.',
-         p:['← viene de cannyEdge(), donde se construye al recorrer los contornos de findContours']},
-        {n:'reserva', d:'La instancia de ReservaBordes para gestionar IDs.',
-         p:['← viene de cannyEdge(): reserva = ReservaBordes(max_ids=MAX_IDS)']},
-        {n:'bordes', d:'El diccionario de bordes clasificados para detectar entradas y salidas.',
-         p:['← viene de cannyEdge(): bordes = clasificar_bordes(roi_poly)']},
-        {n:'bboxes', d:'Dict de {(cx,cy): (x1,y1,x2,y2,area)}. Rectángulo y área de cada blob detectado.',
-         p:['← viene de cannyEdge(), construido junto con centroides al recorrer los contornos']},
-        {n:'umbral_borde', d:'Distancia en píxeles para considerar que un blob está en un borde.',
-         p:['← viene de cannyEdge() como UMBRAL_BORDE de config.py','→ se pasa como umbral a detectar_borde(cx, cy, bordes, umbral_borde)']},
-      ]},
-      {title:'Variables internas clave', vars:[
-        {n:'ids_activos', d:'Lista de todos los IDs que había en self.tracks al inicio de este frame.',
-         p:[]},
-        {n:'asignados_track / asignados_det', d:'Sets que registran qué tracks y qué detecciones ya fueron emparejados en este frame.',
-         p:[]},
-        {n:'scores', d:'Matriz 2D numpy [detecciones × tracks]. Cada celda es el costo de asignar ese blob a ese track. Se busca el mínimo iterativamente.',
-         p:['← se llena con valores calculados a partir de dist (de _posicion_esperada()), ang_score (de _diff_angulo()), area_score y dir_score']},
-        {n:'dist', d:'Distancia entre la posición proyectada y la posición real del blob detectado.',
-         p:['← viene del return de _posicion_esperada(tid, pasos=3)']},
-        {n:'ang_score', d:'Diferencia de dirección entre el track y el blob detectado. 0=mismo rumbo, 1=opuesto.',
-         p:['← viene del return de _diff_angulo(ang_track, ang_det)', '← donde ang_track y ang_det vienen de _angulo()']},
-        {n:'area_score', d:'Diferencia de tamaño entre el blob detectado y el promedio del historial de áreas del track.',
-         p:["← usa bboxes para el área actual del blob y np.mean(t[area_hist]) para el promedio del track"]},
-        {n:'dir_score', d:'Penalización si el blob parece moverse en dirección contraria a la última dirección conocida.',
-         p:['← usa UMBRAL_DIR_OPUESTA y PENALIZACION_DIR de config.py',"← usa t[ultima_dir_x] y t[ultima_dir_y] escritos por agregar_track() y actualizados en cada asignación"]},
-        {n:'nuevo_id / id_recuperado', d:'El ID que se asigna a un blob sin track. Puede venir de la reserva, de una fusión activa, o ser completamente nuevo.',
-         p:['→ se pasa como track_id a agregar_track(nuevo_id, cx, cy)','→ se pasa como track_id a reserva.confirmar_activo(nuevo_id)']},
-      ]},
-      {title:'Fases resumidas', vars:[
-        {n:'1. Greedy', d:'Construye la matriz de scores llamando a _posicion_esperada(), _angulo() y _diff_angulo(). Asigna cada blob al track más probable de uno en uno.', p:[]},
-        {n:'2. Sin asignar', d:'Blobs sin track: ¿vienen de una fusión activa? ¿entran por un borde (detectar_borde)? ¿se rescatan de un track invisible cercano?', p:[]},
-        {n:'3. Tracks perdidos', d:'Tracks sin blob asignado: se vuelven invisibles, acumulan edad_invisible, detectan absorción por blob cercano (fusiones_activas) o salida por borde (registrar_salida).', p:[]},
-        {n:'4. Limpieza', d:'Elimina de self.tracks todos los que tienen edad_invisible > max_edad, excepto los que están en fusiones_activas. Llama a _actualizar_proximidad() al final.', p:[]},
-      ]},
-      {title:'Conecta con', vars:[]},
-    ],
-    connects:['_predecir()','_posicion_esperada()','_calcular_velocidad()','_angulo()','_diff_angulo()','agregar_track()','detectar_borde()','ReservaBordes','_actualizar_proximidad()']
-  },
-
-  callbacks:{
-    badge:'Utilidad', badgeClass:'badge-gray',
-    title:'callback() y mouse_callback()',
-    sub:'Funciones de apoyo para OpenCV. No tienen lógica propia.',
-    sections:[
-      {title:'callback(val)', vars:[
-        {n:'val', d:'Valor del trackbar en el momento en que el usuario lo mueve. No se usa para nada dentro de la función.',
-         p:['← OpenCV lo pasa automáticamente al llamar al callback del trackbar']},
-      ]},
-      {title:'mouse_callback(event, x, y, flags, param)', vars:[
-        {n:'event', d:'Tipo de acción del mouse (clic izquierdo, movimiento, etc.).',
-         p:['← OpenCV lo pasa automáticamente cuando ocurre un evento en la ventana registrada']},
-        {n:'x, y', d:'Coordenadas del pixel en la ventana donde ocurrió el evento.',
-         p:['→ si event es EVENT_LBUTTONDOWN, x,y se añaden a la lista global puntos_roi']},
-        {n:'flags', d:'Información extra como si había Ctrl o Shift presionado al hacer el evento. No se usa aquí.',
-         p:[]},
-        {n:'param', d:'Datos adicionales opcionales que se pueden pasar al registrar el callback. No se usa aquí.',
-         p:[]},
-        {n:'puntos_roi', d:'Variable global (lista) donde se acumulan los puntos marcados.',
-         p:['→ calibrar_roi() lee esta lista global para dibujar el polígono en pantalla y para construir el return final']},
-      ]},
-      {title:'Conecta con', vars:[]},
-    ],
-    connects:['calibrar_roi() (le pasa mouse_callback a OpenCV con setMouseCallback)']
+  let html = `<div class="tt-title">${data.title}</div>`;
+  if (data.sections) {
+    data.sections.forEach(s => {
+      html += `<div class="tt-section">${s.label}</div>`;
+      html += `<div style="font-size:10.5px;line-height:1.7;color:#94a3b8">${s.content}</div>`;
+    });
   }
-};
-
-function show(key) {
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  document.getElementById('nav-'+key).classList.add('active');
-  const d = data[key];
-  if (!d) return;
-
-  let html = `<div class="d-head">
-    <span class="d-badge ${d.badgeClass}">${d.badge}</span>
-    <div>
-      <div class="d-title">${d.title}</div>
-      <div class="d-sub">${d.sub}</div>
-    </div>
-  </div>`;
-
-  for (const s of d.sections) {
-    if (s.title === 'Conecta con') {
-      html += `<div class="divider"></div><div class="section-title">Conecta con</div><div class="connects-row">`;
-      for (const c of d.connects) html += `<span class="chip">${c}</span>`;
-      html += `</div>`;
-    } else if (s.vars.length) {
-      html += `<div class="section-title">${s.title}</div>`;
-      for (const v of s.vars) {
-        html += `<div class="var-block"><div class="var-row">
-          <span class="var-name">${v.n}</span>
-          <span class="var-desc">${v.d}</span>
-        </div>`;
-        if (v.p && v.p.length) {
-          html += `<div class="param-flow-col">`;
-          for (const flow of v.p) html += `<span class="param-flow">${flow}</span>`;
-          html += `</div>`;
-        }
-        html += `</div>`;
-      }
-    } else if (s.title !== 'Conecta con') {
-      html += `<div class="section-title">${s.title}</div>`;
-    }
-  }
-
-  document.getElementById('detail-panel').innerHTML = html;
+  tooltip.innerHTML = html;
+  tooltip.style.display = 'block';
+  positionTooltip(e);
 }
 
-show('reserva');
+function positionTooltip(e) {
+  const tw = 340, th = tooltip.offsetHeight;
+  let x = e.clientX + 14, y = e.clientY + 14;
+  if (x + tw > window.innerWidth) x = e.clientX - tw - 14;
+  if (y + th > window.innerHeight) y = e.clientY - th - 14;
+  tooltip.style.left = x + 'px';
+  tooltip.style.top  = y + 'px';
+}
+
+document.querySelectorAll('.node').forEach(node => {
+  node.addEventListener('mouseenter', e => showTooltip(node, e));
+  node.addEventListener('mousemove',  e => positionTooltip(e));
+  node.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
+  node.addEventListener('click', e => highlightNode(node.id));
+});
+
+// ─────────────────────────────────────────────
+//  HIGHLIGHT ON CLICK
+// ─────────────────────────────────────────────
+let activeNode = null;
+
+function highlightNode(nodeId) {
+  const allNodes = document.querySelectorAll('.node');
+  const allPaths = document.querySelectorAll('.arrow-path');
+
+  if (activeNode === nodeId) {
+    // Deselect
+    activeNode = null;
+    allNodes.forEach(n => n.classList.remove('dimmed','active'));
+    allPaths.forEach(p => p.classList.remove('dimmed','active'));
+    return;
+  }
+  activeNode = nodeId;
+
+  // Find connected nodes
+  const connected = new Set([nodeId]);
+  edges.forEach(e => {
+    if (e.from === nodeId) connected.add(e.to);
+    if (e.to === nodeId)   connected.add(e.from);
+  });
+
+  allNodes.forEach(n => {
+    n.classList.toggle('dimmed', !connected.has(n.id));
+    n.classList.toggle('active',  n.id === nodeId);
+  });
+
+  allPaths.forEach(p => {
+    const ef = p.getAttribute('data-from');
+    const et = p.getAttribute('data-to');
+    const active = ef === nodeId || et === nodeId;
+    p.classList.toggle('dimmed', !active);
+    p.classList.toggle('active',  active);
+  });
+}
+
+// Click on background deselects
+document.getElementById('canvas').addEventListener('click', e => {
+  if (e.target === document.getElementById('canvas') || e.target === document.getElementById('svg-overlay')) {
+    if (activeNode) {
+      activeNode = null;
+      document.querySelectorAll('.node').forEach(n => n.classList.remove('dimmed','active'));
+      document.querySelectorAll('.arrow-path').forEach(p => p.classList.remove('dimmed','active'));
+    }
+  }
+});
+
+// ─────────────────────────────────────────────
+//  ARROW DRAWING
+// ─────────────────────────────────────────────
+function getCenter(el) {
+  const canvas = document.getElementById('canvas');
+  const cRect  = canvas.getBoundingClientRect();
+  const eRect  = el.getBoundingClientRect();
+  const wrapper = document.getElementById('canvas-wrapper');
+  const scrollX = wrapper.scrollLeft;
+  const scrollY = wrapper.scrollTop;
+  return {
+    x: eRect.left - cRect.left + scrollX + eRect.width / 2,
+    y: eRect.top  - cRect.top  + scrollY + eRect.height / 2,
+    w: eRect.width,
+    h: eRect.height,
+    left:   eRect.left - cRect.left + scrollX,
+    right:  eRect.left - cRect.left + scrollX + eRect.width,
+    top:    eRect.top  - cRect.top  + scrollY,
+    bottom: eRect.top  - cRect.top  + scrollY + eRect.height,
+  };
+}
+
+function drawArrows() {
+  const svg = document.getElementById('svg-overlay');
+  svg.innerHTML = '';
+
+  const defs = document.createElementNS('http://www.w3.org/2000/svg','defs');
+
+  const arrowColors = { call:'#475569', data:'#fbbf24', ret:'#a78bfa' };
+
+  ['call','data','ret'].forEach(type => {
+    const marker = document.createElementNS('http://www.w3.org/2000/svg','marker');
+    marker.setAttribute('id', `arrow-${type}`);
+    marker.setAttribute('markerWidth','8');
+    marker.setAttribute('markerHeight','8');
+    marker.setAttribute('refX','6');
+    marker.setAttribute('refY','3');
+    marker.setAttribute('orient','auto');
+    const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+    path.setAttribute('d','M0,0 L0,6 L8,3 z');
+    path.setAttribute('fill', arrowColors[type]);
+    marker.appendChild(path);
+    defs.appendChild(marker);
+  });
+  svg.appendChild(defs);
+
+  edges.forEach(edge => {
+    const fromEl = document.getElementById(edge.from);
+    const toEl   = document.getElementById(edge.to);
+    if (!fromEl || !toEl) return;
+
+    const f = getCenter(fromEl);
+    const t = getCenter(toEl);
+
+    // Determine connection points (closest edges)
+    let x1, y1, x2, y2;
+    const dx = t.x - f.x;
+    const dy = t.y - f.y;
+
+    if (Math.abs(dx) > Math.abs(dy)) {
+      if (dx > 0) { x1=f.right; y1=f.y; x2=t.left;  y2=t.y; }
+      else         { x1=f.left;  y1=f.y; x2=t.right; y2=t.y; }
+    } else {
+      if (dy > 0) { x1=f.x; y1=f.bottom; x2=t.x; y2=t.top; }
+      else         { x1=f.x; y1=f.top;    x2=t.x; y2=t.bottom; }
+    }
+
+    const cpx = (x1+x2)/2;
+    const cpy = (y1+y2)/2;
+    const bend = 40;
+
+    let cx1, cy1, cx2, cy2;
+    if (Math.abs(dx) > Math.abs(dy)) {
+      cx1 = x1 + (x2-x1)*0.4; cy1 = y1 + (Math.random()-0.5)*bend;
+      cx2 = x1 + (x2-x1)*0.6; cy2 = y2 + (Math.random()-0.5)*bend;
+    } else {
+      cx1 = x1 + (Math.random()-0.5)*bend; cy1 = y1 + (y2-y1)*0.4;
+      cx2 = x2 + (Math.random()-0.5)*bend; cy2 = y1 + (y2-y1)*0.6;
+    }
+
+    const col = arrowColors[edge.type] || '#475569';
+    const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+    path.setAttribute('d', `M${x1},${y1} C${cx1},${cy1} ${cx2},${cy2} ${x2},${y2}`);
+    path.setAttribute('stroke', col);
+    path.setAttribute('stroke-width', '1.5');
+    path.setAttribute('fill', 'none');
+    path.setAttribute('opacity', '0.55');
+    if (edge.type === 'data') path.setAttribute('stroke-dasharray','5,3');
+    if (edge.type === 'ret')  path.setAttribute('stroke-dasharray','3,2');
+    path.setAttribute('marker-end', `url(#arrow-${edge.type})`);
+    path.classList.add('arrow-path');
+    path.setAttribute('data-from', edge.from);
+    path.setAttribute('data-to',   edge.to);
+    svg.appendChild(path);
+
+    // Label
+    if (edge.label) {
+      const txt = document.createElementNS('http://www.w3.org/2000/svg','text');
+      txt.setAttribute('x', cpx);
+      txt.setAttribute('y', cpy - 4);
+      txt.setAttribute('text-anchor','middle');
+      txt.setAttribute('font-size','9');
+      txt.setAttribute('font-family','JetBrains Mono, monospace');
+      txt.setAttribute('fill', col);
+      txt.setAttribute('opacity','0.7');
+      txt.textContent = edge.label;
+      svg.appendChild(txt);
+    }
+  });
+}
+
+// ─────────────────────────────────────────────
+//  PAN DRAG
+// ─────────────────────────────────────────────
+const wrapper = document.getElementById('canvas-wrapper');
+let isPanning = false, startX, startY, scrollLeft, scrollTop;
+
+wrapper.addEventListener('mousedown', e => {
+  if (e.target.closest('.node')) return;
+  isPanning = true;
+  wrapper.classList.add('dragging');
+  startX = e.pageX - wrapper.offsetLeft;
+  startY = e.pageY - wrapper.offsetTop;
+  scrollLeft = wrapper.scrollLeft;
+  scrollTop  = wrapper.scrollTop;
+});
+document.addEventListener('mouseup', () => {
+  isPanning = false;
+  wrapper.classList.remove('dragging');
+});
+wrapper.addEventListener('mousemove', e => {
+  if (!isPanning) return;
+  e.preventDefault();
+  const x = e.pageX - wrapper.offsetLeft;
+  const y = e.pageY - wrapper.offsetTop;
+  wrapper.scrollLeft = scrollLeft - (x - startX);
+  wrapper.scrollTop  = scrollTop  - (y - startY);
+});
+
+// ─────────────────────────────────────────────
+//  INIT
+// ─────────────────────────────────────────────
+window.addEventListener('load', () => {
+  setTimeout(drawArrows, 100);
+
+  // Update SVG canvas size
+  const canvas = document.getElementById('canvas');
+  const svg = document.getElementById('svg-overlay');
+  svg.setAttribute('width',  canvas.scrollWidth);
+  svg.setAttribute('height', canvas.scrollHeight);
+  svg.setAttribute('viewBox', `0 0 ${canvas.scrollWidth} ${canvas.scrollHeight}`);
+});
+
+window.addEventListener('resize', () => {
+  setTimeout(drawArrows, 100);
+});
 </script>
 </body>
 </html>
