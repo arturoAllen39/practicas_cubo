@@ -5,7 +5,7 @@
 
 
 # ── VIDEO ─────────────────────────────────────
-VIDEO_PATH = 'video2.mp4'       # Ruta del video a procesar
+VIDEO_PATH = 'video3.mp4'       # Ruta del video a procesar
 
 
 # ── ÁREA DE JUEGO ─────────────────────────────
@@ -66,7 +66,7 @@ OPEN_INIT = 3                   # Tamaño inicial del kernel de apertura morfol�
 
 
 # ── DETECCIÓN DE CONTORNOS ────────────────────
-AREA_MIN_CONTORNO = 300         # Área mínima en px² para considerar un contorno
+AREA_MIN_CONTORNO = 350         # Área mínima en px² para considerar un contorno
                                 # como blob válido. Subir para filtrar más ruido.
 
 
@@ -84,7 +84,7 @@ WIN_VIDEO_Y    = 0              # Posición Y de la ventana de video
 
 
 # ── GREEDY ────────────────────────────────────
-UMBRAL_DIR_OPUESTA = -0.3       # Producto punto mínimo para considerar
+UMBRAL_DIR_OPUESTA = -0.1       # Producto punto mínimo para considerar
                                 # direcciones opuestas en el score
                                 # -1.0 = exactamente opuestos
                                 # -0.3 = más de 107 grados de diferencia
@@ -93,7 +93,7 @@ PENALIZACION_DIR   = 0.5        # Penalización aplicada al score cuando
 
 
 # ── CONTACTO FÍSICO DE BBOXES ─────────────────
-UMBRAL_CONTACTO_BBOX = 4   # Píxeles de margen alrededor de cada bbox
+UMBRAL_CONTACTO_BBOX = 5   # Píxeles de margen alrededor de cada bbox
                             # para considerar que dos blobs "se tocan".
                             # 0 = requiere solapamiento real.
                             # 8-15 = captura el momento justo antes de
@@ -103,7 +103,7 @@ UMBRAL_CONTACTO_BBOX = 4   # Píxeles de margen alrededor de cada bbox
 # ── CONTACTO FÍSICO DE BBOXES ─────────────────
 UMBRAL_CONTACTO_BBOX       = 2      # Reducido: solo detecta contacto real,
                                     # no proximidad. 0 = solapamiento puro.
-FRAMES_MIN_CONTACTO        = 4      # Frames consecutivos de contacto antes
+FRAMES_MIN_CONTACTO        = 2      # Frames consecutivos de contacto antes
                                     # de tratarlo como fusión real. Evita
                                     # falsos positivos de un solo frame.
 FACTOR_AMORTIGUACION_CAPSULA = 0.97 # Factor de desaceleración de la predicción
