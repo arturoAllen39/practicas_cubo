@@ -188,21 +188,11 @@ class BlobTracker:
         self.pares_fusionados = set()
         self.contactos_activos = {}
 
-        # Memoria de inercia pre-contacto
-        self.memoria_precontacto = {}
-
-        # Ventana temporal post-fusión para relajar distancia
-        self.post_fusion_frames = defaultdict(int)
-        self.frames_post_fusion = 20
-        self.mult_dist_post_fusion = 2.2
-
     def reset(self):
         self.tracks            = {}
         self.next_id           = 1
         self.pares_fusionados  = set()
         self.contactos_activos = {}
-        self.memoria_precontacto = {}
-        self.post_fusion_frames = defaultdict(int)
 
     def _angulo(self, vx, vy):
         return np.degrees(np.arctan2(vy, vx))
@@ -266,6 +256,8 @@ class BlobTracker:
             # mantener la estimación fresca.
             'px_pred':     t['cx'] + t['vx'],
             'py_pred':     t['cy'] + t['vy'],
+            'cx_inicio':   t['cx'],
+            'cy_inicio':   t['cy'],
             'frames_dentro': 0,   # cuántos frames lleva dentro de la fusión
         }
 
@@ -310,7 +302,7 @@ class BlobTracker:
         sin_solape = (ax2 < bx1 or bx2 < ax1 or ay2 < by1 or by2 < ay1)
         return not sin_solape
 
-    def _detectar_contactos(self, bboxes):
+    def _detectar_contactos(self, bboxes, bbox_margin=5):
         """
         Recorre todos los pares de tracks visibles y comprueba si sus bboxes
         están en contacto físico en este frame.
@@ -357,7 +349,7 @@ class BlobTracker:
                 if bbox_a is None or bbox_b is None:
                     continue
 
-                if not self._bboxes_en_contacto(bbox_a, bbox_b):
+                if not self._bboxes_en_contacto(bbox_a, bbox_b, margen=bbox_margin):
                     continue
 
                 pares_en_contacto_ahora.add(par)
@@ -369,36 +361,21 @@ class BlobTracker:
                         'capsula_b':       self._congelar_capsula(tid_b),
                         'frames_contacto': 1,
                     }
-
-                    # Guardar memoria pre-contacto una sola vez
-                    self.memoria_precontacto.setdefault(tid_a, {
-                        'vx': t_a['vx'],
-                        'vy': t_a['vy'],
-                        'dir_x': t_a['ultima_dir_x'],
-                        'dir_y': t_a['ultima_dir_y'],
-                        'cx': t_a['cx'],
-                        'cy': t_a['cy']
-                    })
-                    self.memoria_precontacto.setdefault(tid_b, {
-                        'vx': t_b['vx'],
-                        'vy': t_b['vy'],
-                        'dir_x': t_b['ultima_dir_x'],
-                        'dir_y': t_b['ultima_dir_y'],
-                        'cx': t_b['cx'],
-                        'cy': t_b['cy']
-                    })
-
+                    # Aún no se marca como fusión real hasta FRAMES_MIN_CONTACTO
                     print(f"[CONTACTO DETECTADO] Par {par} frame 1/{FRAMES_MIN_CONTACTO}")
                 else:
-                    # Contacto continúa: mantener la predicción de las cápsulas
+                    # Contacto continúa: avanzar predicciones
                     contacto = self.contactos_activos[par]
                     contacto['frames_contacto'] += 1
                     self._actualizar_prediccion_capsula(contacto['capsula_a'])
                     self._actualizar_prediccion_capsula(contacto['capsula_b'])
 
-                    if contacto['frames_contacto'] >= FRAMES_MIN_CONTACTO:
+                    # Solo marcar como fusión real una vez que se confirma
+                    if contacto['frames_contacto'] == FRAMES_MIN_CONTACTO:
                         self.pares_fusionados.add(par)
                         print(f"[CONTACTO CONFIRMADO] Par {par} — fusión real")
+                    elif contacto['frames_contacto'] > FRAMES_MIN_CONTACTO:
+                        self.pares_fusionados.add(par)
 
         # Pares que ya no están en contacto → distinguir fusión de separación
         pares_a_eliminar = set(self.contactos_activos.keys()) - pares_en_contacto_ahora
@@ -410,8 +387,6 @@ class BlobTracker:
                 # No confirmado → falso positivo, eliminar sin más
                 del self.contactos_activos[par]
                 self.pares_fusionados.discard(par)
-                self.memoria_precontacto.pop(tid_a, None)
-                self.memoria_precontacto.pop(tid_b, None)
                 print(f"[CONTACTO CANCELADO] Par {par} — no llegó al mínimo "
                       f"({contacto['frames_contacto']}/{FRAMES_MIN_CONTACTO})")
                 continue
@@ -433,25 +408,22 @@ class BlobTracker:
                 if t_visible is not None:
                     dx = cap_invis['dir_x']
                     dy = cap_invis['dir_y']
-                    sp = cap_invis['speed']
-                    # La cápsula invisible se predice a FACTOR_SEPARACION píxeles
-                    # en su dirección original a partir del blob visible.
-                    # Cuando se separen, debería aparecer ahí.
-                    cap_invis['px_pred'] = t_visible['cx'] + dx * sp * FACTOR_SEPARACION
-                    cap_invis['py_pred'] = t_visible['cy'] + dy * sp * FACTOR_SEPARACION
+                    # Usar una distancia fija razonable (MAX_DIST) en vez de
+                    # speed*FACTOR_SEPARACION, que colapsa cuando la velocidad
+                    # se amortigua durante fusiones largas
+                    offset = max(cap_invis['speed'] * FACTOR_SEPARACION,
+                                 self.max_dist * 0.8)
+                    cap_invis['px_pred'] = t_visible['cx'] + dx * offset
+                    cap_invis['py_pred'] = t_visible['cy'] + dy * offset
                     cap_invis['frames_dentro'] = cap_invis.get('frames_dentro', 0) + 1
                 self.pares_fusionados.add(par)
             else:
-                # Ambos visibles pero ya no en contacto → separación real
+                # Ambos visibles pero ya no en contacto → separación real,
+                # o el contacto duró muy poco antes de que ambos se alejasen.
                 del self.contactos_activos[par]
                 self.pares_fusionados.discard(par)
-
-                # Abrir ventana post-fusión para ambos IDs
-                self.post_fusion_frames[tid_a] = self.frames_post_fusion
-                self.post_fusion_frames[tid_b] = self.frames_post_fusion
-
                 print(f"[SEPARACION] Par {par} — separación real "
-                    f"({contacto['frames_contacto']} frames)")
+                      f"({contacto['frames_contacto']} frames)")
 
     def _buscar_bbox(self, cx, cy, bboxes):
         """
@@ -463,40 +435,80 @@ class BlobTracker:
         clave = min(bboxes.keys(), key=lambda k: abs(k[0]-cx) + abs(k[1]-cy))
         return bboxes[clave]
 
+    def _resolver_separaciones_batch(self, blobs_sin_asignar):
+        """
+        Resuelve la asignación de IDs para TODOS los blobs sin asignar
+        de una vez, usando asignación óptima (Hungarian-style greedy).
+
+        Esto evita el bug donde el primer blob sin asignar roba el ID
+        de una cápsula que en realidad correspondía al segundo blob.
+
+        Devuelve una lista de (cx, cy, id_recuperado, par) para cada
+        blob que encontró una cápsula candidata.
+        """
+        # Recopilar todas las cápsulas disponibles de contactos confirmados
+        capsulas = []
+        for par, contacto in self.contactos_activos.items():
+            if contacto['frames_contacto'] < FRAMES_MIN_CONTACTO:
+                continue
+            for clave_cap in ('capsula_a', 'capsula_b'):
+                cap = contacto[clave_cap]
+                if cap.get('liberado', False):
+                    continue
+                capsulas.append((cap, par))
+
+        if not capsulas or not blobs_sin_asignar:
+            return []
+
+        radio = self.max_dist * MULT_DIST_RESCATE * 2
+
+        # Construir matriz de distancias blob × cápsula
+        n_blobs = len(blobs_sin_asignar)
+        n_caps  = len(capsulas)
+        matriz  = np.full((n_blobs, n_caps), np.inf)
+
+        for bi, (cx, cy) in enumerate(blobs_sin_asignar):
+            for ci, (cap, par) in enumerate(capsulas):
+                dist = np.sqrt((cx - cap['px_pred'])**2 + (cy - cap['py_pred'])**2)
+                if dist <= radio:
+                    matriz[bi, ci] = dist
+
+        # Greedy óptimo: asignar el par más cercano primero
+        asignaciones = []
+        usados_blobs = set()
+        usados_caps  = set()
+
+        while True:
+            if np.all(np.isinf(matriz)):
+                break
+            bi, ci = np.unravel_index(np.argmin(matriz), matriz.shape)
+            if matriz[bi, ci] == np.inf:
+                break
+            cx, cy   = blobs_sin_asignar[bi]
+            cap, par = capsulas[ci]
+            asignaciones.append((cx, cy, cap['id'], par))
+            usados_blobs.add(bi)
+            usados_caps.add(ci)
+            matriz[bi, :] = np.inf
+            matriz[:, ci] = np.inf
+
+        return asignaciones
+
     def _resolver_separacion(self, cx, cy):
-        """
-        Cuando aparece un blob nuevo sin track asignado, busca en
-        contactos_activos cuál de las cápsulas congeladas predice una
-        posición más cercana a (cx, cy).
-
-        Solo considera contactos que hayan superado FRAMES_MIN_CONTACTO.
-        Esto evita que un contacto falso (dos blobs rozándose un frame)
-        provoque una recuperación de ID inmediata errónea.
-
-        Devuelve (id_recuperado, par) si encuentra un candidato,
-        o (None, None) si no hay ningún contacto confirmado cerca.
-        """
-        mejor_dist = self.max_dist * MULT_DIST_RESCATE
+        """Compatibilidad: búsqueda individual. Usar _resolver_separaciones_batch."""
+        mejor_dist = self.max_dist * MULT_DIST_RESCATE * 2
         mejor_id   = None
         mejor_par  = None
 
         for par, contacto in self.contactos_activos.items():
             if contacto['frames_contacto'] < FRAMES_MIN_CONTACTO:
                 continue
-
             for clave_cap in ('capsula_a', 'capsula_b'):
                 cap = contacto[clave_cap]
                 if cap.get('liberado', False):
                     continue
-
-                factor_post = 1.0
-                if self.post_fusion_frames.get(cap['id'], 0) > 0:
-                    factor_post = self.mult_dist_post_fusion
-
-                umbral_cap = self.max_dist * MULT_DIST_RESCATE * factor_post
                 dist = np.sqrt((cx - cap['px_pred'])**2 + (cy - cap['py_pred'])**2)
-
-                if dist < umbral_cap and dist < mejor_dist:
+                if dist < mejor_dist:
                     mejor_dist = dist
                     mejor_id   = cap['id']
                     mejor_par  = par
@@ -527,28 +539,13 @@ class BlobTracker:
     # ── FIN NUEVO ──────────────────────────────────────────────────────────────
 
 
-    def actualizar(self, centroides, reserva, bordes, bboxes, umbral_borde=10):
+    def actualizar(self, centroides, reserva, bordes, bboxes, umbral_borde=10, bbox_margin=5):
         self._predecir()
 
         # ── NUEVO: detectar contactos físicos ANTES de la asignación ──────────
         # Esto ocurre mientras todos los blobs son aún visibles, garantizando
         # que las cápsulas se congelan con la mejor información posible.
-        self._detectar_contactos(bboxes)
-        # ──────────────────────────────────────────────────────────────────────
-
-        # ── ids_en_contacto: IDs protegidos por el sistema de contactos ────────
-        # Se divide en dos sets con propósitos distintos:
-        #
-        # ids_excluidos_greedy — tracks INVISIBLES dentro de un contacto
-        #   CONFIRMADO. Estos no deben competir en el greedy porque su blob ya
-        #   desapareció (están fusionados dentro de otro). Si compitieran,
-        #   podrían "robar" la detección del blob combinado.
-        #
-        # ids_en_contacto — todos los IDs con cápsula activa (visibles o no).
-        #   Se usa solo para protegerlos de edad_invisible y de la limpieza.
-        #   Los tracks VISIBLES en contacto siguen compitiendo en el greedy con
-        #   normalidad: el blob fusionado se asignará al que esté más cerca,
-        #   y el otro quedará invisible de forma natural.
+        self._detectar_contactos(bboxes, bbox_margin=bbox_margin)
         ids_en_contacto      = set()
         ids_excluidos_greedy = set()
         for par, contacto in self.contactos_activos.items():
@@ -638,49 +635,43 @@ class BlobTracker:
 
                 cx, cy = centroides[di]
                 t = self.tracks[tid]
-
-                t['cx'] = cx
-                t['cy'] = cy
-                t['visible'] = True
+                t['historial'].append((cx, cy))
+                if len(t['historial']) > self.vel_history:
+                    t['historial'].pop(0)
+                t['vx'], t['vy'] = self._calcular_velocidad(t['historial'])
+                vel_mag = np.sqrt(t['vx']**2 + t['vy']**2)
+                if vel_mag > 0.5:
+                    t['ultima_dir_x'] = t['vx'] / vel_mag
+                    t['ultima_dir_y'] = t['vy'] / vel_mag
+                t['cx']             = cx
+                t['cy']             = cy
+                t['visible']        = True
                 t['edad_invisible'] = 0
-
-                # Si el track está en contacto, congelar su inercia
-                if tid not in ids_en_contacto:
-                    t['historial'].append((cx, cy))
-                    if len(t['historial']) > self.vel_history:
-                        t['historial'].pop(0)
-
-                    t['vx'], t['vy'] = self._calcular_velocidad(t['historial'])
-                    vel_mag = np.sqrt(t['vx']**2 + t['vy']**2)
-                    if vel_mag > 0.5:
-                        t['ultima_dir_x'] = t['vx'] / vel_mag
-                        t['ultima_dir_y'] = t['vy'] / vel_mag
-                else:
-                    mem = self.memoria_precontacto.get(tid)
-                    if mem:
-                        t['vx'] = mem['vx']
-                        t['vy'] = mem['vy']
-                        t['ultima_dir_x'] = mem['dir_x']
-                        t['ultima_dir_y'] = mem['dir_y']
-
-                # Solo actualizar área cuando NO está en fusión
                 bbox_k = min(bboxes.keys(),
-                            key=lambda k: abs(k[0]-cx) + abs(k[1]-cy),
-                            default=None)
-                if bbox_k and bbox_k in bboxes and tid not in ids_en_contacto:
+                             key=lambda k: abs(k[0]-cx) + abs(k[1]-cy),
+                             default=None)
+                if bbox_k and bbox_k in bboxes:
                     t['area_hist'].append(bboxes[bbox_k][4])
 
         # ── Detecciones sin asignar ───────────────────────────────────────────
+        # Resolver TODAS las separaciones de una vez antes de procesar una a una
+        blobs_sin_asignar_list = [(cx, cy) for di, (cx, cy) in enumerate(centroides)
+                                  if di not in asignados_det]
+        separaciones_resueltas = self._resolver_separaciones_batch(blobs_sin_asignar_list)
+        mapa_separaciones = {(cx, cy): (id_rec, par) for cx, cy, id_rec, par in separaciones_resueltas}
+
         for di, (cx, cy) in enumerate(centroides):
             if di not in asignados_det:
 
                 # ── Intentar resolver como separación de contacto ─────────────
-                id_recuperado, par_origen = self._resolver_separacion(cx, cy)
+                if (cx, cy) in mapa_separaciones:
+                    id_recuperado, par_origen = mapa_separaciones[(cx, cy)]
+                else:
+                    id_recuperado, par_origen = None, None
 
                 if id_recuperado is not None:
                     self._cerrar_contacto_por_separacion(par_origen, id_recuperado)
                     self.agregar_track(id_recuperado, cx, cy)
-                    self.post_fusion_frames[id_recuperado] = self.frames_post_fusion
                     reserva.confirmar_activo(id_recuperado)
                     self.next_id = max(self.next_id, id_recuperado + 1)
                     print(f"[SEPARACION] ID {id_recuperado} recuperado del par {par_origen}")
@@ -783,12 +774,8 @@ class BlobTracker:
         for tid in ids_activos:
             if tid not in asignados_track:
                 t = self.tracks[tid]
-                t['visible'] = False
+                t['visible']         = False
                 t['edad_invisible'] += 1
-
-                # IDs en contacto confirmado: no amortiguar ni mover aquí
-                if tid in ids_en_contacto:
-                    continue
 
                 ultima_cx = t['cx']
                 ultima_cy = t['cy']
@@ -797,6 +784,12 @@ class BlobTracker:
                 t['vy'] *= FACTOR_AMORTIGUACION
                 t['cx']  = t['cx_pred']
                 t['cy']  = t['cy_pred']
+
+                # ── Si este ID ya está registrado en un contacto activo,
+                # su cápsula congelada tiene toda la información necesaria.
+                # No buscar absorción: el sistema nuevo ya lo cubre.
+                if tid in ids_en_contacto:
+                    continue
 
                 borde_salida = detectar_borde(ultima_cx, ultima_cy, bordes, umbral_borde)
                 if borde_salida and t['edad_invisible'] == 5:
@@ -824,15 +817,9 @@ class BlobTracker:
 
         if self.contactos_activos:
             print(f"[CONTACTOS] {list(self.contactos_activos.keys())}")
-        
-        for tid in list(self.post_fusion_frames.keys()):
-            self.post_fusion_frames[tid] -= 1
-            if self.post_fusion_frames[tid] <= 0:
-                del self.post_fusion_frames[tid]
 
         return [(t['cx'], t['cy'], tid, t['vx'], t['vy'])
                 for tid, t in self.tracks.items() if t['visible']]
-    
 
     def _posicion_esperada(self, track_id, pasos=3):
         """Proyecta la posición esperada usando los últimos N desplazamientos."""
@@ -881,6 +868,8 @@ def cannyEdge():
     cv.createTrackbar('Close',      win_controls, 17, 20,  callback)
     cv.createTrackbar('Open',       win_controls, 6,  20,  callback)
     cv.createTrackbar('Dilate',     win_controls, 1,  15,  callback)
+    cv.createTrackbar('Erode',      win_controls, 1,  15,  callback)
+    cv.createTrackbar('BBox_margin', win_controls, 20, 40, callback)
 
     cv.imshow(win_controls, np.zeros((100, 400), dtype=np.uint8))
 
@@ -920,13 +909,14 @@ def cannyEdge():
         close_k = cv.getTrackbarPos('Close',       win_controls)
         open_k  = cv.getTrackbarPos('Open',        win_controls)
         dilate_k = cv.getTrackbarPos('Dilate',      win_controls)
+        erode_k  = cv.getTrackbarPos('Erode',       win_controls)
 
         if blur_k < 1:        blur_k  = 1
         if blur_k % 2 == 0:   blur_k += 1
         if close_k < 1:       close_k = 1
         if open_k < 1:        open_k  = 1
-        if dilate_k < 1:      dilate_k = 1
-
+        if dilate_k < 1:     dilate_k = 1
+        if erode_k < 1:      erode_k  = 1
         if min_val >= max_val: min_val = max(0, max_val - 1)
 
         gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
@@ -951,6 +941,12 @@ def cannyEdge():
             iterations=1
         )
 
+        mask = cv.erode(
+            mask,
+            np.ones((erode_k, erode_k), np.uint8),
+            iterations=1
+        )
+
         roi_mask = np.zeros_like(mask)
         cv.fillPoly(roi_mask, [roi_poly], 255)
         mask = cv.bitwise_and(mask, roi_mask)
@@ -969,7 +965,10 @@ def cannyEdge():
             centroides.append((cx, cy))
             bboxes[(cx, cy)] = (x, y, x + w, y + h, area)
 
-        resultado = tracker.actualizar(centroides, reserva, bordes, bboxes, UMBRAL_BORDE)
+        bbox_margin = cv.getTrackbarPos('BBox_margin', win_controls)
+        bbox_margin = bbox_margin - 20
+        resultado   = tracker.actualizar(centroides, reserva, bordes, bboxes,
+                                         UMBRAL_BORDE, bbox_margin=bbox_margin)
 
         display = cv.cvtColor(mask, cv.COLOR_GRAY2BGR) if mostrar_filtros else frame.copy()
         cv.polylines(display, [roi_poly], isClosed=True, color=(0, 255, 255), thickness=2)
@@ -987,8 +986,25 @@ def cannyEdge():
                 if len(historial_areas[tid]) > MAX_HISTORIAL:
                     historial_areas[tid].pop(0)
 
+                # Solo mostrar array fusionado cuando hay un contacto CONFIRMADO
+                # Y al menos uno de los dos IDs es invisible (fusión real en detector)
                 ids_fusionados_con_tid = []
                 for (id_a, id_b) in tracker.pares_fusionados:
+                    par = (min(id_a, id_b), max(id_a, id_b))
+                    if par not in tracker.contactos_activos:
+                        continue
+                    contacto = tracker.contactos_activos[par]
+
+                    # Verificar que al menos uno de los dos es invisible
+                    t_a_check = tracker.tracks.get(id_a)
+                    t_b_check = tracker.tracks.get(id_b)
+                    a_invisible = t_a_check is not None and not t_a_check['visible']
+                    b_invisible = t_b_check is not None and not t_b_check['visible']
+                    fusion_real = a_invisible or b_invisible
+
+                    if not fusion_real:
+                        continue
+
                     if id_a == tid:
                         ids_fusionados_con_tid.append(str(id_b))
                     elif id_b == tid:
@@ -1024,3 +1040,8 @@ def cannyEdge():
 
 if __name__ == '__main__':
     cannyEdge()
+
+
+
+    # Fusion antes de tiempo
+    

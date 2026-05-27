@@ -103,7 +103,7 @@ UMBRAL_CONTACTO_BBOX = 5   # Píxeles de margen alrededor de cada bbox
 # ── CONTACTO FÍSICO DE BBOXES ─────────────────
 UMBRAL_CONTACTO_BBOX       = 2      # Reducido: solo detecta contacto real,
                                     # no proximidad. 0 = solapamiento puro.
-FRAMES_MIN_CONTACTO        = 2      # Frames consecutivos de contacto antes
+FRAMES_MIN_CONTACTO        = 1      # Frames consecutivos de contacto antes
                                     # de tratarlo como fusión real. Evita
                                     # falsos positivos de un solo frame.
 FACTOR_AMORTIGUACION_CAPSULA = 0.97 # Factor de desaceleración de la predicción
