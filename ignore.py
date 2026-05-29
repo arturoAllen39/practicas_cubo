@@ -3,6 +3,8 @@ import cv2 as cv
 import numpy as np
 from collections import defaultdict, deque
 from config import *
+import sys
+import argparse
 
 mostrar_filtros = True
 puntos_roi = []
@@ -428,11 +430,25 @@ class BlobTracker:
     def _buscar_bbox(self, cx, cy, bboxes):
         """
         Devuelve el bbox del frame actual cuyo centroide esté más cerca de
-        (cx, cy). Devuelve None si bboxes está vacío.
+        (cx, cy). Devuelve None si bboxes está vacío o si el bbox más cercano
+        está demasiado lejos (evita que tracks fantasmas en los bordes capturen
+        bboxes legítimos del centro de la pantalla).
         """
         if not bboxes:
             return None
+            
+        # Encontrar el centroide detectado más cercano en coordenadas
         clave = min(bboxes.keys(), key=lambda k: abs(k[0]-cx) + abs(k[1]-cy))
+        
+        # Calcular la distancia euclidiana real entre el track y ese bbox
+        dist = np.sqrt((cx - clave[0])**2 + (cy - clave[1])**2)
+        
+        # UMBRAL DE SEGURIDAD: Si el bbox está más lejos de lo tolerable,
+        # significa que este track no tiene una detección real asociada en este frame.
+        umbral_maximo = max(self.max_dist * 2.5, 120)
+        if dist > umbral_maximo:
+            return None
+            
         return bboxes[clave]
 
     def _resolver_separaciones_batch(self, blobs_sin_asignar):
@@ -835,14 +851,24 @@ class BlobTracker:
 # ─────────────────────────────────────────────
 #  MAIN
 # ─────────────────────────────────────────────
-def cannyEdge():
+def cannyEdge(fuente=None):
     global mostrar_filtros
 
-    cap = cv.VideoCapture(VIDEO_PATH)
-    fps   = cap.get(cv.CAP_PROP_FPS)
-    delay = int(1000 / fps) if fps > 0 else 30
+    if fuente is None:
+        fuente = VIDEO_PATH
+
+    if fuente == '0' or fuente == 0:
+        cap   = cv.VideoCapture(0)
+        delay = 30
+        print("Usando cámara web")
+    else:
+        cap   = cv.VideoCapture(fuente)
+        fps   = cap.get(cv.CAP_PROP_FPS)
+        delay = int(1000 / fps) if fps > 0 else 30
+        print(f"Usando video: {fuente}")
+
     if not cap.isOpened():
-        print("No se pudo abrir el video")
+        print("No se pudo abrir la fuente de video")
         return
 
     roi_poly = calibrar_roi(cap)
@@ -1039,7 +1065,20 @@ def cannyEdge():
     cv.destroyAllWindows()
 
 if __name__ == '__main__':
-    cannyEdge()
+    parser = argparse.ArgumentParser(description='Tracker Cubo Negro')
+    grupo  = parser.add_mutually_exclusive_group()
+    grupo.add_argument('--webcam', action='store_true',
+                       help='Usar cámara web en lugar del video configurado')
+    grupo.add_argument('--video', type=str, metavar='RUTA',
+                       help='Ruta a un video específico (sobreescribe VIDEO_PATH)')
+    args = parser.parse_args()
+
+    if args.webcam:
+        cannyEdge(fuente=0)
+    elif args.video:
+        cannyEdge(fuente=args.video)
+    else:
+        cannyEdge()
 
 
 

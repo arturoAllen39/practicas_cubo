@@ -84,7 +84,7 @@ WIN_VIDEO_Y    = 0              # Posición Y de la ventana de video
 
 
 # ── GREEDY ────────────────────────────────────
-UMBRAL_DIR_OPUESTA = -0.1       # Producto punto mínimo para considerar
+UMBRAL_DIR_OPUESTA = -0.0       # Producto punto mínimo para considerar
                                 # direcciones opuestas en el score
                                 # -1.0 = exactamente opuestos
                                 # -0.3 = más de 107 grados de diferencia
