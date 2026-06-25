@@ -857,10 +857,10 @@ def cannyEdge(fuente=None):
     if fuente is None:
         fuente = VIDEO_PATH
 
-    if fuente == '0' or fuente == 0:
-        cap   = cv.VideoCapture(0)
+    if str(fuente).isdigit():
+        cap   = cv.VideoCapture(int(fuente))
         delay = 30
-        print("Usando cámara web")
+        print(f"Usando cámara web (Índice {fuente})")
     else:
         cap   = cv.VideoCapture(fuente)
         fps   = cap.get(cv.CAP_PROP_FPS)
@@ -888,14 +888,17 @@ def cannyEdge(fuente=None):
     cv.moveWindow(win_video,    0,   0)
     cv.moveWindow(win_controls, 710, 0)
 
-    cv.createTrackbar('Blur',       win_controls, 10,  31,  callback)
-    cv.createTrackbar('Min_thresh', win_controls, 0,  255, callback)
-    cv.createTrackbar('Max_thresh', win_controls, 45, 255, callback)
-    cv.createTrackbar('Close',      win_controls, 17, 20,  callback)
-    cv.createTrackbar('Open',       win_controls, 6,  20,  callback)
-    cv.createTrackbar('Dilate',     win_controls, 1,  15,  callback)
-    cv.createTrackbar('Erode',      win_controls, 1,  15,  callback)
-    cv.createTrackbar('BBox_margin', win_controls, 20, 40, callback)
+    cv.createTrackbar('Blur',       win_controls, 31,  31,  callback)
+    cv.createTrackbar('Min_thresh', win_controls, 166,  255, callback)
+    cv.createTrackbar('Max_thresh', win_controls, 201, 255, callback)
+    cv.createTrackbar('Close',      win_controls, 20, 20,  callback)
+    cv.createTrackbar('Open',       win_controls, 10,  20,  callback)
+    cv.createTrackbar('Dilate',     win_controls, 15,  15,  callback)
+    cv.createTrackbar('Erode',      win_controls, 15,  15,  callback)
+    cv.createTrackbar('BBox_margin', win_controls, 5, 40, callback)
+    cv.createTrackbar('Area_min', win_controls, AREA_MIN_CONTORNO, 5000, callback)
+    cv.createTrackbar('Suavizado_Luz', win_controls, 255, 255, callback)
+    cv.createTrackbar('Brillo_Base', win_controls, 200, 255, callback)
 
     cv.imshow(win_controls, np.zeros((100, 400), dtype=np.uint8))
 
@@ -936,7 +939,9 @@ def cannyEdge(fuente=None):
         open_k  = cv.getTrackbarPos('Open',        win_controls)
         dilate_k = cv.getTrackbarPos('Dilate',      win_controls)
         erode_k  = cv.getTrackbarPos('Erode',       win_controls)
+        area_min = cv.getTrackbarPos('Area_min', win_controls)
 
+        if area_min < 1:      area_min = 1
         if blur_k < 1:        blur_k  = 1
         if blur_k % 2 == 0:   blur_k += 1
         if close_k < 1:       close_k = 1
@@ -945,9 +950,44 @@ def cannyEdge(fuente=None):
         if erode_k < 1:      erode_k  = 1
         if min_val >= max_val: min_val = max(0, max_val - 1)
 
-        gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
+        if min_val >= max_val: min_val = max(0, max_val - 1)
+
+        # ──────────────────────────────────────────────────────────────────────
+        # FILTRO DE LUZ HOMOGÉNEA (SIN INTERFERENCIA DE COLOR)
+        # ──────────────────────────────────────────────────────────────────────
+        ksize = cv.getTrackbarPos('Suavizado_Luz', win_controls)
+        brillo_base = cv.getTrackbarPos('Brillo_Base', win_controls)
+
+        # 1. Extraemos solo el canal de Luz (L)
+        lab = cv.cvtColor(frame, cv.COLOR_BGR2LAB)
+        l, a, b = cv.split(lab)
+
+        # 2. Estimamos las manchas de luz del proyector
+        l_mini = cv.resize(l, (0, 0), fx=0.1, fy=0.1, interpolation=cv.INTER_AREA)
+        ksize_mini = int(ksize * 0.1)
+        if ksize_mini % 2 == 0: ksize_mini += 1
+        if ksize_mini < 3: ksize_mini = 3
+        
+        mapa_luz_mini = cv.GaussianBlur(l_mini, (ksize_mini, ksize_mini), 0)
+        mapa_luz = cv.resize(mapa_luz_mini, (l.shape[1], l.shape[0]), interpolation=cv.INTER_LINEAR)
+
+        # 3. División matemática para lograr un fondo gris plano
+        l_plana = cv.divide(l, mapa_luz, scale=brillo_base)
+
+        # 4. EL TRUCO MAGISTRAL: Usamos directamente la luz aplanada como escala de grises.
+        # (Omitimos usar cv.cvtColor para que los tonos de la cámara no nos arruinen la luz)
+        gray = l_plana 
+        
+        # Sobrescribimos el 'frame' para poder ver el aplanado en el Modo ORIGINAL
+        frame = cv.cvtColor(l_plana, cv.COLOR_GRAY2BGR)
+        # ──────────────────────────────────────────────────────────────────────
+
+        # Aplicamos el desenfoque directo a nuestra nueva imagen aplanada
         blur = cv.GaussianBlur(gray, (blur_k, blur_k), 0)
-        mask = cv.inRange(blur, min_val, max_val)
+        
+        # Filtro de sustraccion de fondo manual
+        _, mask = cv.threshold(blur, min_val, max_val, cv.THRESH_BINARY_INV)
+
         mask = cv.morphologyEx(
             mask,
             cv.MORPH_CLOSE,
@@ -983,7 +1023,7 @@ def cannyEdge(fuente=None):
         bboxes     = {}
         for cnt in contours:
             area = cv.contourArea(cnt)
-            if area < AREA_MIN_CONTORNO:
+            if area < area_min:
                 continue
             x, y, w, h = cv.boundingRect(cnt)
             cx = x + w // 2
@@ -1021,7 +1061,6 @@ def cannyEdge(fuente=None):
                         continue
                     contacto = tracker.contactos_activos[par]
 
-                    # Verificar que al menos uno de los dos es invisible
                     t_a_check = tracker.tracks.get(id_a)
                     t_b_check = tracker.tracks.get(id_b)
                     a_invisible = t_a_check is not None and not t_a_check['visible']
@@ -1067,19 +1106,21 @@ def cannyEdge(fuente=None):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Tracker Cubo Negro')
     grupo  = parser.add_mutually_exclusive_group()
-    grupo.add_argument('--webcam', action='store_true',
-                       help='Usar cámara web en lugar del video configurado')
+    
+    # MODIFICADO: Ahora --webcam puede recibir un número (por defecto es 0 si no pones nada)
+    grupo.add_argument('--webcam', type=str, nargs='?', const='0', metavar='INDICE',
+                       help='Usar cámara web (puedes pasarle 0, 1, 2... por defecto es 0)')
     grupo.add_argument('--video', type=str, metavar='RUTA',
                        help='Ruta a un video específico (sobreescribe VIDEO_PATH)')
     args = parser.parse_args()
 
-    if args.webcam:
-        cannyEdge(fuente=0)
+    # MODIFICADO: Envía la fuente seleccionada de forma dinámica
+    if args.webcam is not None:
+        cannyEdge(fuente=args.webcam)
     elif args.video:
         cannyEdge(fuente=args.video)
     else:
         cannyEdge()
-
 
 
     # Fusion antes de tiempo

@@ -3,6 +3,8 @@ import cv2 as cv
 import numpy as np
 from collections import defaultdict, deque
 from config import *
+import sys
+import argparse
 
 mostrar_filtros = True
 puntos_roi = []
@@ -128,16 +130,32 @@ class ReservaBordes:
             'izquierdo': deque(),
             'derecho':   deque()
         }
-        self.ids_en_reserva = set()
-        self.ids_activos    = set()
-        self.total_ids      = 0
+        self.ids_en_reserva   = set()
+        self.ids_activos      = set()
+        self.total_ids        = 0
+        self.ids_jugando      = deque()  # IDs que desaparecieron dentro del campo
 
     def reset(self):
         for cola in self.reservas.values():
             cola.clear()
         self.ids_en_reserva.clear()
         self.ids_activos.clear()
+        self.ids_jugando.clear()
         self.total_ids = 0
+
+    def registrar_desaparicion_interior(self, track_id):
+        """Blob desapareció dentro del campo (no por borde). Guarda su ID."""
+        if track_id not in self.ids_en_reserva and track_id not in self.ids_jugando:
+            self.ids_jugando.append(track_id)
+            self.ids_activos.discard(track_id)
+
+    def recuperar_id_interior(self):
+        """Devuelve un ID de la lista de IDs jugando, o None si está vacía."""
+        if self.ids_jugando:
+            track_id = self.ids_jugando.popleft()
+            self.ids_activos.add(track_id)
+            return track_id
+        return None
 
     def registrar_salida(self, track_id, borde):
         if track_id not in self.ids_en_reserva:
@@ -428,11 +446,25 @@ class BlobTracker:
     def _buscar_bbox(self, cx, cy, bboxes):
         """
         Devuelve el bbox del frame actual cuyo centroide esté más cerca de
-        (cx, cy). Devuelve None si bboxes está vacío.
+        (cx, cy). Devuelve None si bboxes está vacío o si el bbox más cercano
+        está demasiado lejos (evita que tracks fantasmas en los bordes capturen
+        bboxes legítimos del centro de la pantalla).
         """
         if not bboxes:
             return None
+            
+        # Encontrar el centroide detectado más cercano en coordenadas
         clave = min(bboxes.keys(), key=lambda k: abs(k[0]-cx) + abs(k[1]-cy))
+        
+        # Calcular la distancia euclidiana real entre el track y ese bbox
+        dist = np.sqrt((cx - clave[0])**2 + (cy - clave[1])**2)
+        
+        # UMBRAL DE SEGURIDAD: Si el bbox está más lejos de lo tolerable,
+        # significa que este track no tiene una detección real asociada en este frame.
+        umbral_maximo = max(self.max_dist * 2.5, 120)
+        if dist > umbral_maximo:
+            return None
+            
         return bboxes[clave]
 
     def _resolver_separaciones_batch(self, blobs_sin_asignar):
@@ -753,17 +785,18 @@ class BlobTracker:
                         continue
 
                 if borde_entrada:
+                    # Entró por borde → usar reserva FIFO normal
                     nuevo_id = reserva.registrar_entrada(borde_entrada)
                 else:
-                    nuevo_id = reserva.registrar_entrada('izquierdo') \
-                               if not any(reserva.reservas.values()) else None
-
-                if nuevo_id is None:
-                    total_en_uso = len(reserva.ids_activos) + len(reserva.ids_en_reserva)
-                    if total_en_uso < reserva.max_ids:
-                        nuevo_id = self.next_id
-                    else:
-                        continue
+                    # Apareció dentro del campo → usar lista_ids_jugando primero
+                    nuevo_id = reserva.recuperar_id_interior()
+                    if nuevo_id is None:
+                        # Lista vacía (inicio del juego) → crear ID nuevo
+                        total_en_uso = len(reserva.ids_activos) + len(reserva.ids_en_reserva)
+                        if total_en_uso < reserva.max_ids:
+                            nuevo_id = self.next_id
+                        else:
+                            continue
 
                 self.agregar_track(nuevo_id, cx, cy)
                 reserva.confirmar_activo(nuevo_id)
@@ -792,14 +825,20 @@ class BlobTracker:
                     continue
 
                 borde_salida = detectar_borde(ultima_cx, ultima_cy, bordes, umbral_borde)
-                if borde_salida and t['edad_invisible'] == 5:
+                if t['edad_invisible'] == 5:
                     apunta_afuera = False
-                    if borde_salida == 'inferior'   and t['vy'] > 0: apunta_afuera = True
-                    elif borde_salida == 'superior'  and t['vy'] < 0: apunta_afuera = True
-                    elif borde_salida == 'derecho'   and t['vx'] > 0: apunta_afuera = True
-                    elif borde_salida == 'izquierdo' and t['vx'] < 0: apunta_afuera = True
+                    if borde_salida:
+                        if borde_salida == 'inferior'   and t['vy'] > 0: apunta_afuera = True
+                        elif borde_salida == 'superior'  and t['vy'] < 0: apunta_afuera = True
+                        elif borde_salida == 'derecho'   and t['vx'] > 0: apunta_afuera = True
+                        elif borde_salida == 'izquierdo' and t['vx'] < 0: apunta_afuera = True
+
                     if apunta_afuera:
+                        # Salió por un borde → reserva normal
                         reserva.registrar_salida(tid, borde_salida)
+                    else:
+                        # Desapareció dentro del campo → lista_ids_jugando
+                        reserva.registrar_desaparicion_interior(tid)
 
         # ids_en_contacto ya fue construido al inicio de "tracks sin asignar".
         # Es el unico conjunto de proteccion ahora: cualquier ID con capsula
@@ -835,14 +874,24 @@ class BlobTracker:
 # ─────────────────────────────────────────────
 #  MAIN
 # ─────────────────────────────────────────────
-def cannyEdge():
+def cannyEdge(fuente=None):
     global mostrar_filtros
 
-    cap = cv.VideoCapture(VIDEO_PATH)
-    fps   = cap.get(cv.CAP_PROP_FPS)
-    delay = int(1000 / fps) if fps > 0 else 30
+    if fuente is None:
+        fuente = VIDEO_PATH
+
+    if str(fuente).isdigit():
+        cap   = cv.VideoCapture(int(fuente))
+        delay = 30
+        print(f"Usando cámara web (Índice {fuente})")
+    else:
+        cap   = cv.VideoCapture(fuente)
+        fps   = cap.get(cv.CAP_PROP_FPS)
+        delay = int(1000 / fps) if fps > 0 else 30
+        print(f"Usando video: {fuente}")
+
     if not cap.isOpened():
-        print("No se pudo abrir el video")
+        print("No se pudo abrir la fuente de video")
         return
 
     roi_poly = calibrar_roi(cap)
@@ -862,14 +911,17 @@ def cannyEdge():
     cv.moveWindow(win_video,    0,   0)
     cv.moveWindow(win_controls, 710, 0)
 
-    cv.createTrackbar('Blur',       win_controls, 10,  31,  callback)
-    cv.createTrackbar('Min_thresh', win_controls, 0,  255, callback)
-    cv.createTrackbar('Max_thresh', win_controls, 45, 255, callback)
-    cv.createTrackbar('Close',      win_controls, 17, 20,  callback)
-    cv.createTrackbar('Open',       win_controls, 6,  20,  callback)
-    cv.createTrackbar('Dilate',     win_controls, 1,  15,  callback)
-    cv.createTrackbar('Erode',      win_controls, 1,  15,  callback)
-    cv.createTrackbar('BBox_margin', win_controls, 20, 40, callback)
+    cv.createTrackbar('Blur',       win_controls, 31,  31,  callback)
+    cv.createTrackbar('Min_thresh', win_controls, 161,  255, callback)
+    cv.createTrackbar('Max_thresh', win_controls, 140, 255, callback)
+    cv.createTrackbar('Close',      win_controls, 20, 20,  callback)
+    cv.createTrackbar('Open',       win_controls, 0,  20,  callback)
+    cv.createTrackbar('Dilate',     win_controls, 4,  15,  callback)
+    cv.createTrackbar('Erode',      win_controls, 15,  15,  callback)
+    cv.createTrackbar('BBox_margin', win_controls, 5, 40, callback)
+    cv.createTrackbar('Area_min', win_controls, AREA_MIN_CONTORNO, 5000, callback)
+    cv.createTrackbar('Suavizado_Luz', win_controls, 255, 255, callback)
+    cv.createTrackbar('Brillo_Base', win_controls, 200, 255, callback)
 
     cv.imshow(win_controls, np.zeros((100, 400), dtype=np.uint8))
 
@@ -910,7 +962,9 @@ def cannyEdge():
         open_k  = cv.getTrackbarPos('Open',        win_controls)
         dilate_k = cv.getTrackbarPos('Dilate',      win_controls)
         erode_k  = cv.getTrackbarPos('Erode',       win_controls)
+        area_min = cv.getTrackbarPos('Area_min', win_controls)
 
+        if area_min < 1:      area_min = 1
         if blur_k < 1:        blur_k  = 1
         if blur_k % 2 == 0:   blur_k += 1
         if close_k < 1:       close_k = 1
@@ -919,9 +973,44 @@ def cannyEdge():
         if erode_k < 1:      erode_k  = 1
         if min_val >= max_val: min_val = max(0, max_val - 1)
 
-        gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
+        if min_val >= max_val: min_val = max(0, max_val - 1)
+
+        # ──────────────────────────────────────────────────────────────────────
+        # FILTRO DE LUZ HOMOGÉNEA (SIN INTERFERENCIA DE COLOR)
+        # ──────────────────────────────────────────────────────────────────────
+        ksize = cv.getTrackbarPos('Suavizado_Luz', win_controls)
+        brillo_base = cv.getTrackbarPos('Brillo_Base', win_controls)
+
+        # 1. Extraemos solo el canal de Luz (L)
+        lab = cv.cvtColor(frame, cv.COLOR_BGR2LAB)
+        l, a, b = cv.split(lab)
+
+        # 2. Estimamos las manchas de luz del proyector
+        l_mini = cv.resize(l, (0, 0), fx=0.1, fy=0.1, interpolation=cv.INTER_AREA)
+        ksize_mini = int(ksize * 0.1)
+        if ksize_mini % 2 == 0: ksize_mini += 1
+        if ksize_mini < 3: ksize_mini = 3
+        
+        mapa_luz_mini = cv.GaussianBlur(l_mini, (ksize_mini, ksize_mini), 0)
+        mapa_luz = cv.resize(mapa_luz_mini, (l.shape[1], l.shape[0]), interpolation=cv.INTER_LINEAR)
+
+        # 3. División matemática para lograr un fondo gris plano
+        l_plana = cv.divide(l, mapa_luz, scale=brillo_base)
+
+        # 4. EL TRUCO MAGISTRAL: Usamos directamente la luz aplanada como escala de grises.
+        # (Omitimos usar cv.cvtColor para que los tonos de la cámara no nos arruinen la luz)
+        gray = l_plana 
+        
+        # Sobrescribimos el 'frame' para poder ver el aplanado en el Modo ORIGINAL
+        frame = cv.cvtColor(l_plana, cv.COLOR_GRAY2BGR)
+        # ──────────────────────────────────────────────────────────────────────
+
+        # Aplicamos el desenfoque directo a nuestra nueva imagen aplanada
         blur = cv.GaussianBlur(gray, (blur_k, blur_k), 0)
-        mask = cv.inRange(blur, min_val, max_val)
+        
+        # Filtro de sustraccion de fondo manual
+        _, mask = cv.threshold(blur, min_val, max_val, cv.THRESH_BINARY_INV)
+
         mask = cv.morphologyEx(
             mask,
             cv.MORPH_CLOSE,
@@ -957,7 +1046,7 @@ def cannyEdge():
         bboxes     = {}
         for cnt in contours:
             area = cv.contourArea(cnt)
-            if area < AREA_MIN_CONTORNO:
+            if area < area_min:
                 continue
             x, y, w, h = cv.boundingRect(cnt)
             cx = x + w // 2
@@ -988,27 +1077,36 @@ def cannyEdge():
 
                 # Solo mostrar array fusionado cuando hay un contacto CONFIRMADO
                 # Y al menos uno de los dos IDs es invisible (fusión real en detector)
+                # Construir grupos de fusión conectados para soportar [X,Y,Z]
+                # Un grupo es un conjunto de IDs todos fusionados entre sí,
+                # directa o indirectamente a través de pares intermedios.
                 ids_fusionados_con_tid = []
+                pares_reales = set()
                 for (id_a, id_b) in tracker.pares_fusionados:
                     par = (min(id_a, id_b), max(id_a, id_b))
                     if par not in tracker.contactos_activos:
                         continue
-                    contacto = tracker.contactos_activos[par]
-
-                    # Verificar que al menos uno de los dos es invisible
                     t_a_check = tracker.tracks.get(id_a)
                     t_b_check = tracker.tracks.get(id_b)
-                    a_invisible = t_a_check is not None and not t_a_check['visible']
-                    b_invisible = t_b_check is not None and not t_b_check['visible']
-                    fusion_real = a_invisible or b_invisible
+                    a_inv = t_a_check is not None and not t_a_check['visible']
+                    b_inv = t_b_check is not None and not t_b_check['visible']
+                    if a_inv or b_inv:
+                        pares_reales.add(par)
 
-                    if not fusion_real:
-                        continue
-
-                    if id_a == tid:
-                        ids_fusionados_con_tid.append(str(id_b))
-                    elif id_b == tid:
-                        ids_fusionados_con_tid.append(str(id_a))
+                # BFS para encontrar todos los IDs conectados a tid
+                if any(tid in par for par in pares_reales):
+                    visitados = {tid}
+                    cola = [tid]
+                    while cola:
+                        actual = cola.pop(0)
+                        for (id_a, id_b) in pares_reales:
+                            if id_a == actual and id_b not in visitados:
+                                visitados.add(id_b)
+                                cola.append(id_b)
+                            elif id_b == actual and id_a not in visitados:
+                                visitados.add(id_a)
+                                cola.append(id_a)
+                    ids_fusionados_con_tid = [str(i) for i in visitados if i != tid]
 
                 grosor = 3 if ids_fusionados_con_tid else 2
                 cv.rectangle(display, (x1, y1), (x2, y2), color, grosor)
@@ -1039,8 +1137,23 @@ def cannyEdge():
     cv.destroyAllWindows()
 
 if __name__ == '__main__':
-    cannyEdge()
+    parser = argparse.ArgumentParser(description='Tracker Cubo Negro')
+    grupo  = parser.add_mutually_exclusive_group()
+    
+    # MODIFICADO: Ahora --webcam puede recibir un número (por defecto es 0 si no pones nada)
+    grupo.add_argument('--webcam', type=str, nargs='?', const='0', metavar='INDICE',
+                       help='Usar cámara web (puedes pasarle 0, 1, 2... por defecto es 0)')
+    grupo.add_argument('--video', type=str, metavar='RUTA',
+                       help='Ruta a un video específico (sobreescribe VIDEO_PATH)')
+    args = parser.parse_args()
 
+    # MODIFICADO: Envía la fuente seleccionada de forma dinámica
+    if args.webcam is not None:
+        cannyEdge(fuente=args.webcam)
+    elif args.video:
+        cannyEdge(fuente=args.video)
+    else:
+        cannyEdge()
 
 
     # Fusion antes de tiempo
