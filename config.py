@@ -66,7 +66,7 @@ OPEN_INIT = 3                   # Tamaño inicial del kernel de apertura morfol�
 
 
 # ── DETECCIÓN DE CONTORNOS ────────────────────
-AREA_MIN_CONTORNO = 2170         # Área mínima en px² para considerar un contorno
+AREA_MIN_CONTORNO = 2250         # Área mínima en px² para considerar un contorno
                                 # como blob válido. Subir para filtrar más ruido.
 
 

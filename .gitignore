@@ -1,3 +1,18 @@
 # Videos
 *.mov
 *.mp4
+#Archivos Py omitidos
+CLAHE.py
+config2.py
+homogenea.py
+ignore.py
+segmentacion.py
+sort.py
+test2.py
+
+#otros
+images.png
+mapa_completo_codigo.html
+notes.txt
+tracking_config.txt
+Video_screenshot_04.03.2026.png
